@@ -1,0 +1,2396 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  CloudRain, Sun, Wind, Droplets, MapPin, Truck, Factory, Package, 
+  Users, DollarSign, FileText, LogOut, CheckCircle, Award, Stamp, 
+  ChevronRight, Lock, QrCode, X, Edit, PlusCircle, ArrowRight, PhoneCall,
+  Wrench, BarChart2, Briefcase, Globe, AlertTriangle, Beaker, Calculator,
+  ShoppingCart, HandCoins, Box, Anchor, ShieldCheck, CheckSquare, ScanFace,
+  Receipt, ShoppingBag, Target, ShieldAlert, FileWarning, ToggleLeft, ToggleRight, Settings, Calendar,
+  Download, Upload, FileJson, Leaf, RefreshCw, Trash2,
+  Radio, MessageSquare, Map, Wifi, Smartphone, Database, Printer, Fingerprint, Zap, Cpu, Filter, Activity, User
+} from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, onSnapshot, runTransaction, setDoc, getDoc } from 'firebase/firestore';
+
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+const app = firebaseConfig ? initializeApp(firebaseConfig) : null;
+const auth = app ? getAuth(app) : null;
+const db = app ? getFirestore(app) : null;
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'sel-et-vie-erp-v10-final';
+
+const INITIAL_STATE = {
+  config: { forcePaiementComptant: true },
+  tresorerie: 625000,
+  stocks: { fatickBrut: 18000, usineBrut: 3000, selTrie: 500, freinte: 300, selLave: 1000, kio3: 50, intrantsAromes: 20 },
+  emballages: { sac50: 500, sac25: 1000, sachet1kg: 5000, sachet500g: 8000, potArome: 500 },
+  produitsFinis: { 'Sel_50kg': 100, 'Sel_25kg': 200, 'Sachet_1kg': 1000, 'Sachet_500g': 500, 'Bloc_Betail': 50, 'Aromatise_Premium': 30 },
+  depots: [{ id: 'depot_touba', nom: 'Dépôt Touba', stocks: { 'Sel_50kg': 20, 'Sel_25kg': 50 }, emplacements: {'A1': 'Sel_50kg', 'B2': 'Sachet_1kg'} }],
+  personnel: [
+    { id: 'p1', nom: 'Amadou (Admin)', role: 'admin', pin: '1234', type: 'interne', modeRemuneration: 'mois', salaire: 200000, primes: 0, avances: 0, reussites: 15 },
+    { id: 'p2', nom: 'Ousmane (Chef Op)', role: 'operateur', pin: '0000', type: 'interne', modeRemuneration: 'mois', salaire: 150000, primes: 0, avances: 0, reussites: 42 },
+    { id: 'p3', nom: 'Awa (Commerciale)', role: 'commercial', pin: '1111', type: 'interne', modeRemuneration: 'mois', salaire: 150000, primes: 0, avances: 0, reussites: 28 },
+    { id: 'p4', nom: 'Moussa (Livreur)', role: 'livreur', pin: '2222', type: 'externe', modeRemuneration: 'voyage', prixVoyage: 15000, voyagesCumules: 3, primes: 0, avances: 0, reussites: 5 },
+    { id: 'p5', nom: 'Ibou (Manœuvre)', role: 'manoeuvre', pin: '5555', type: 'externe', modeRemuneration: 'jour', tauxJournalier: 4000, joursTravailles: 12, primes: 0, avances: 0, reussites: 0 },
+    { id: 'p6', nom: 'Consultant Qualité', role: 'consultant', pin: '6666', type: 'externe', modeRemuneration: 'pourcentage', pourcentageBenefice: 5, primes: 0, avances: 0, reussites: 0 }
+  ],
+  sauniers: [ { id: 's1', nom: 'GIE Sel Fatick', score: 95, avance: 50000, livraisons: 15, telephone: '+221771234567', dette: 0 }, { id: 's2', nom: 'Coopérative Sine', score: 80, avance: 0, livraisons: 8, telephone: '+221761234567', dette: 15000 } ],
+  lots: [{ id: 'LOT-DEMO', qty: 1000, resteKg: 500, hash: '0x3f5c...9a1b', date: new Date().toISOString(), status: 'Conforme', labo: { iode: 40, humidite: 2, insolubles: 0.1, validateur: 'Amadou' } }],
+  transactions: [ { id: 'CAPEX-1', date: new Date().toISOString(), type: 'ACHAT', montant: -1375000, desc: 'Achat Moulin INOX 316L + Séchoir', isCapex: true, auteur: 'Système' } ],
+  systemLogs: [],
+  maintenance: [ { id: 'm1', machine: 'Broyeur INOX MBI', status: 'Opérationnel', lastMaintenance: new Date().toISOString(), tonnageProcess: 25000, alert: false } ],
+  flotte: [ { id: 'v1', immatriculation: 'DK-1234-A', type: 'Camion Transport', statut: 'En route', carburantMois: 60000, lat: 14.7167, lng: -17.4677 } ],
+  clients: [ { id: 'c1', nom: 'Boulangerie Sokhna', telephone: '+221770000000', type: 'Boulangerie (B2B)', pin: '9999', totalAchats: 1500000, dette: 45000, plafond: 100000 } ],
+  commandesB2B: [],
+  livraisonsEnCours: [], 
+  documentsLegaux: [ { id: 'doc1', nom: 'Autorisation de Fabrication (FRA)', dateExpiration: new Date(Date.now() + 86400000 * 20).toISOString(), status: 'Actif', ref: 'FRA-2026/001' } ],
+  qhse: { incidents: [], checklistHygiene: [ { id: 'chk1', tache: 'Nettoyage complet Moulin INOX', fait: false } ], nonConformites: [] },
+  autoPO: []
+};
+
+const LOGO_URL = "https://i.ibb.co/68z0m0c/Logo-Sel-Et-Vie.png";
+
+const ACHAT_CATALOG = [
+   { id: 'fatickBrut', nom: 'Sel Brut (Fatick)', type: 'stocks' },
+   { id: 'usineBrut', nom: 'Sel Brut (Usine)', type: 'stocks' },
+   { id: 'intrantsAromes', nom: 'Intrants (Épices & Herbes)', type: 'stocks' },
+   { id: 'kio3', nom: 'Iodate de Potassium (KIO3)', type: 'stocks' },
+   { id: 'sac50', nom: 'Emballage : Sac 50kg vide', type: 'emballages' },
+   { id: 'sac25', nom: 'Emballage : Sac 25kg vide', type: 'emballages' },
+   { id: 'sachet1kg', nom: 'Emballage : Sachet 1kg vide', type: 'emballages' },
+   { id: 'sachet500g', nom: 'Emballage : Sachet 500g vide', type: 'emballages' },
+   { id: 'potArome', nom: 'Emballage : Pots Premium', type: 'emballages' }
+];
+
+const mergeWithInitialState = (fetchedData) => {
+  if (!fetchedData) return INITIAL_STATE;
+  let fetchedPersonnel = fetchedData.personnel || INITIAL_STATE.personnel;
+  fetchedPersonnel = fetchedPersonnel.map(p => {
+     if (p.paiementParVoyage && !p.modeRemuneration) return { ...p, modeRemuneration: 'voyage' };
+     if (!p.modeRemuneration) return { ...p, modeRemuneration: 'mois' };
+     return p;
+  });
+
+  return {
+    ...INITIAL_STATE, ...fetchedData,
+    stocks: { ...INITIAL_STATE.stocks, ...(fetchedData.stocks || {}) },
+    emballages: { ...INITIAL_STATE.emballages, ...(fetchedData.emballages || {}) },
+    produitsFinis: { ...INITIAL_STATE.produitsFinis, ...(fetchedData.produitsFinis || {}) },
+    config: fetchedData.config || INITIAL_STATE.config,
+    documentsLegaux: fetchedData.documentsLegaux || INITIAL_STATE.documentsLegaux,
+    livraisonsEnCours: fetchedData.livraisonsEnCours || INITIAL_STATE.livraisonsEnCours,
+    depots: fetchedData.depots || INITIAL_STATE.depots,
+    personnel: fetchedPersonnel,
+    sauniers: fetchedData.sauniers || INITIAL_STATE.sauniers,
+    lots: fetchedData.lots || INITIAL_STATE.lots,
+    transactions: fetchedData.transactions || INITIAL_STATE.transactions,
+    systemLogs: fetchedData.systemLogs || INITIAL_STATE.systemLogs,
+    maintenance: fetchedData.maintenance || INITIAL_STATE.maintenance,
+    flotte: fetchedData.flotte || INITIAL_STATE.flotte,
+    clients: fetchedData.clients || INITIAL_STATE.clients,
+    commandesB2B: fetchedData.commandesB2B || INITIAL_STATE.commandesB2B,
+    qhse: { ...INITIAL_STATE.qhse, ...(fetchedData.qhse || {}) },
+    autoPO: fetchedData.autoPO || INITIAL_STATE.autoPO
+  };
+};
+
+const getBpPrice = (prod) => {
+  if(prod === 'Sel_50kg') return 7250; if(prod === 'Sel_25kg') return 3625;
+  if(prod === 'Sachet_1kg') return 300; if(prod === 'Sachet_500g') return 150;
+  if(prod === 'Bloc_Betail') return 1000; if(prod === 'Aromatise_Premium') return 2500; return 0;
+}
+const getKgMultiplier = (prod) => {
+  if(prod === 'Sel_50kg') return 50; if(prod === 'Sel_25kg') return 25;
+  if(prod === 'Sachet_1kg') return 1; if(prod === 'Sachet_500g') return 0.5; return 0;
+}
+
+const LogoComponent = ({ sizeClass = "w-24 h-24" }) => (
+  <div className="flex justify-center items-center"><img src={LOGO_URL} alt="Logo" className={`${sizeClass} rounded-full object-cover border-4 border-[#2EC4B6] shadow-lg bg-white`} onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} /><div className={`${sizeClass} rounded-full border-4 border-[#2EC4B6] hidden items-center justify-center bg-white shadow-lg`}><span className="text-3xl font-extrabold text-[#0D3B48]">S&V</span></div></div>
+);
+
+const getIodeStyle = (valStr) => {
+    const defaultStyle = { backgroundColor: '#ffffff', color: '#374151', borderColor: '#d1d5db', borderWidth: '1px' };
+    if (!valStr || valStr === '') return defaultStyle;
+    const v = Number(valStr);
+    if (isNaN(v) || v < 0) return defaultStyle;
+    
+    // Simulation colorimétrique proportionnelle de la réaction Amidon-Iode (Test RTK)
+    let r, g, b, tColor;
+    if (v <= 40) {
+        const ratio = v / 40;
+        r = Math.round(255 - ratio * (255 - 126));
+        g = Math.round(255 - ratio * (255 - 34));
+        b = Math.round(255 - ratio * (255 - 206));
+        tColor = ratio > 0.6 ? '#ffffff' : '#374151';
+    } else {
+        const ratio = Math.min((v - 40) / 40, 1);
+        r = Math.round(126 - ratio * (126 - 30));
+        g = Math.round(34 - ratio * (34 - 27));
+        b = Math.round(206 - ratio * (206 - 75));
+        tColor = '#ffffff';
+    }
+    
+    return { 
+        backgroundColor: `rgb(${r}, ${g}, ${b})`, 
+        color: tColor,
+        borderColor: `rgb(${Math.max(0, r-40)}, ${Math.max(0, g-40)}, ${Math.max(0, b-40)})`,
+        borderWidth: '2px',
+        transition: 'background-color 0.3s ease, color 0.3s ease'
+    };
+};
+
+const RTK_OPTIONS = [
+   { val: '', label: '-- Couleur observée --' },
+   { val: '0', label: '⚪ Blanc (0 ppm)' },
+   { val: '15', label: '🟣 Violet Pâle (~15 ppm)' },
+   { val: '30', label: '🟣 Violet Clair (~30 ppm)' },
+   { val: '40', label: '🟣 Violet Intense (40 ppm)' },
+   { val: '50', label: '🟣 Violet Foncé (~50 ppm)' },
+   { val: '75', label: '🔵 Bleu (~75 ppm)' },
+   { val: '100', label: '⚫ Noir (100+ ppm)' }
+];
+
+const RTKSelect = ({ value, onChange, label, labelClass }) => (
+   <div>
+      <label className={`text-[10px] font-bold uppercase mb-1 block ${labelClass}`}>{label}</label>
+      <select value={value} onChange={e=>onChange(e.target.value)} className="w-full p-2 rounded text-center font-bold outline-none shadow-inner text-xs cursor-pointer" style={getIodeStyle(value)} required>
+         {RTK_OPTIONS.map(o => <option key={o.val} value={o.val} style={o.val ? getIodeStyle(o.val) : {backgroundColor: '#fff', color: '#000'}}>{o.label}</option>)}
+      </select>
+   </div>
+);
+
+const LaboLotCard = ({ lot, onValidate, currentUser }) => {
+  const [tControle, setTControle] = useState({t1: '', t2: '', t3: ''});
+  const [controleur, setControleur] = useState(currentUser?.nom || '');
+
+  const getAvg = (t) => {
+      const vals = [Number(t.t1), Number(t.t2), Number(t.t3)].filter(v => !isNaN(v) && v >= 0 && t.t1 !== '');
+      if (vals.length === 0) return 0;
+      const sum = vals.reduce((a,b)=>a+b, 0);
+      return sum / vals.length;
+  };
+
+  const avgControle = getAvg(tControle);
+
+  const renderGauge = (avg) => {
+      let color = 'bg-gray-300';
+      let label = 'En attente';
+      if(tControle.t1 !== '') {
+         if(avg < 30) { color = 'bg-red-500'; label = 'Sous-dosé'; }
+         else if(avg <= 50) { color = 'bg-green-500'; label = 'Conforme (Validé)'; }
+         else { color = 'bg-orange-500'; label = 'Sur-dosé'; }
+      }
+      const pos = Math.min(100, (avg / 80) * 100); 
+      return (
+          <div className="mt-3">
+              <div className="flex justify-between text-[10px] text-gray-500 mb-1 font-bold">
+                  <span>0</span><span className="ml-4">30 (Min)</span><span className="mr-4">50 (Max)</span><span>80+</span>
+              </div>
+              <div className="w-full h-3 bg-gray-200 rounded-full relative overflow-hidden shadow-inner">
+                  <div className="absolute left-[37.5%] w-[25%] h-full bg-green-200 opacity-60"></div>
+                  <div className="absolute left-[37.5%] w-px h-full bg-green-600"></div>
+                  <div className="absolute left-[62.5%] w-px h-full bg-green-600"></div>
+                  {tControle.t1 !== '' && <div className={`absolute top-0 left-0 h-full ${color} transition-all duration-500`} style={{width: `${pos}%`}}></div>}
+              </div>
+              <p className={`text-xs font-black mt-2 text-center ${color.replace('bg-', 'text-')}`}>{tControle.t1 !== '' ? `${avg.toFixed(1)} ppm - ${label}` : 'Analysez les échantillons...'}</p>
+          </div>
+      )
+  };
+
+  return (
+      <form onSubmit={(e) => { e.preventDefault(); onValidate(lot.id, avgControle, controleur); }} className="bg-white border border-purple-200 p-5 rounded-2xl mb-6 shadow-md">
+          <div className="flex justify-between items-center mb-6 pb-3 border-b-2 border-purple-100">
+              <h4 className="font-black text-[#0D3B48] text-lg flex items-center gap-2"><Beaker size={20} className="text-[#2EC4B6]"/> Lot : {lot.id}</h4>
+              <span className="text-sm bg-purple-100 px-3 py-1 rounded-lg font-bold text-purple-800 border border-purple-200">Qté: {lot.qty} kg</span>
+          </div>
+
+          {lot.prodTests && (
+              <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
+                   <div>
+                      <p className="text-xs font-bold text-slate-500 uppercase mb-1">Traçabilité : Échantillonnage Machine</p>
+                      <p className="text-sm font-bold text-slate-800">
+                          Base Initiale mesurée : <span className="text-blue-600">{lot.prodTests.avgInit?.toFixed(1)} ppm</span>
+                      </p>
+                   </div>
+                   <div className="text-right">
+                      <p className="text-xs text-slate-500 uppercase mb-1">Opérateur(s)</p>
+                      <p className="text-sm font-black text-slate-800 bg-white px-2 py-1 rounded border border-slate-200">{lot.operateurs || lot.signature}</p>
+                   </div>
+              </div>
+          )}
+
+          <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 shadow-sm mb-6">
+              <h5 className="font-bold text-purple-900 mb-3 text-sm flex items-center gap-2"><CheckCircle size={16} className="text-purple-600"/> Échantillonnage Final RTK (Contrôleur)</h5>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                 <RTKSelect value={tControle.t1} onChange={v=>setTControle({...tControle, t1: v})} label="Échantillon 1" labelClass="text-purple-700" />
+                 <RTKSelect value={tControle.t2} onChange={v=>setTControle({...tControle, t2: v})} label="Échantillon 2" labelClass="text-purple-700" />
+                 <RTKSelect value={tControle.t3} onChange={v=>setTControle({...tControle, t3: v})} label="Échantillon 3" labelClass="text-purple-700" />
+              </div>
+              <div className="bg-white p-3 rounded-lg border border-purple-200">
+                  {renderGauge(avgControle)}
+              </div>
+          </div>
+
+          <div className="mb-6">
+              <label className="block text-xs font-bold text-gray-700 mb-2">Nom du Contrôleur (Validation Qualité)</label>
+              <input type="text" value={controleur} onChange={e=>setControleur(e.target.value)} required className="w-full p-3 border border-gray-300 rounded-lg font-bold text-gray-800 focus:border-[#2EC4B6] outline-none" placeholder="Nom du responsable..."/>
+          </div>
+
+          <button type="submit" className={`w-full font-bold py-4 rounded-xl shadow-md text-lg transition-colors flex items-center justify-center gap-2 ${tControle.t1 !== '' ? (avgControle >= 30 && avgControle <= 50 ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-orange-500 hover:bg-orange-600 text-white') : 'bg-[#0D3B48] hover:bg-slate-800 text-white'}`}>
+              <Stamp size={20}/> 
+              {tControle.t1 !== '' ? (avgControle >= 30 && avgControle <= 50 ? 'Valider le Lot (Conforme)' : 'Mettre le Lot en Quarantaine (Non-conforme)') : 'Valider avec ces résultats'}
+          </button>
+      </form>
+  )
+}
+
+const ProductionIodationForm = ({ stockLave, onSubmit }) => {
+  const [qty, setQty] = useState('');
+  const [kio3, setKio3] = useState('');
+  const [operateurs, setOperateurs] = useState('');
+  const [tInit, setTInit] = useState({t1: '', t2: '', t3: ''});
+
+  const getAvg = (t) => {
+      const vals = [Number(t.t1), Number(t.t2), Number(t.t3)].filter(v => !isNaN(v) && v >= 0 && t.t1 !== '');
+      if (vals.length === 0) return 0;
+      const sum = vals.reduce((a,b)=>a+b, 0);
+      return sum / vals.length;
+  };
+
+  const avgInit = getAvg(tInit);
+
+  // CORRELATION : Calcul dynamique de l'iode à ajouter en fonction de la teneur initiale
+  useEffect(() => {
+      const q = Number(qty);
+      if (q > 0 && tInit.t1 !== '') {
+          const deficit = Math.max(0, 40 - avgInit);
+          const kio3Necessaire = (q * (deficit / 40) * 0.0678) / 1000;
+          setKio3(Number(kio3Necessaire.toFixed(4)));
+      } else {
+          setKio3('');
+      }
+  }, [qty, avgInit, tInit.t1]);
+
+  const renderInitGauge = (avg) => {
+      const deficit = Math.max(0, 40 - avg);
+      const pos = Math.min(100, (avg / 80) * 100); 
+      return (
+          <div className="mt-3">
+              <div className="flex justify-between text-[10px] text-gray-500 mb-1 font-bold">
+                  <span>0</span><span className="ml-4">30 (Min)</span><span className="mr-4">50 (Max)</span><span>80+</span>
+              </div>
+              <div className="w-full h-3 bg-gray-200 rounded-full relative overflow-hidden shadow-inner mb-2">
+                  <div className="absolute left-[37.5%] w-[25%] h-full bg-green-200 opacity-60"></div>
+                  <div className="absolute left-[37.5%] w-px h-full bg-green-600"></div>
+                  <div className="absolute left-[62.5%] w-px h-full bg-green-600"></div>
+                  {tInit.t1 !== '' && <div className={`absolute top-0 left-0 h-full bg-blue-400 transition-all duration-500`} style={{width: `${pos}%`}}></div>}
+              </div>
+              {tInit.t1 !== '' ? (
+                  <div className="text-center">
+                      <p className="text-xs font-black text-blue-700">Base mesurée : {avg.toFixed(1)} ppm</p>
+                      <p className="text-[10px] font-bold text-purple-600 bg-purple-100 px-2 py-1 rounded inline-block mt-1">Déficit à combler : {deficit.toFixed(1)} ppm (Ajustement auto KIO3)</p>
+                  </div>
+              ) : (
+                  <p className="text-xs font-black mt-2 text-center text-gray-400">Renseignez les échantillons pour estimer le déficit.</p>
+              )}
+          </div>
+      )
+  };
+
+  return (
+     <form onSubmit={(e) => { e.preventDefault(); onSubmit(qty, kio3, operateurs, avgInit); setQty(''); setKio3(''); setTInit({t1:'',t2:'',t3:''}); setOperateurs(''); }} className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Qté de Sel Purifié à Ioder (kg)</label>
+                <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} max={stockLave} required min="1" className="w-full p-4 border-2 rounded-xl text-xl font-bold bg-slate-50" placeholder="Ex: 1000" />
+            </div>
+            <div>
+                <label className="block text-sm font-bold text-purple-700 mb-1">Dosage KIO3 (Ajusté au déficit)</label>
+                <div className="flex items-center">
+                    <input type="number" step="0.0001" value={kio3} onChange={e=>setKio3(Number(e.target.value))} required className="w-full p-4 border-2 border-purple-200 rounded-l-xl text-xl font-bold bg-purple-50 text-purple-800" placeholder="0.0000" />
+                    <span className="bg-purple-200 text-purple-900 font-bold p-4 rounded-r-xl border-y-2 border-r-2 border-purple-200">KG</span>
+                </div>
+            </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+                <h5 className="font-bold text-slate-700 mb-3 text-sm flex items-center gap-2"><Filter size={16} className="text-slate-500"/> Échantillonnage Initial RTK (Machine)</h5>
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                   <RTKSelect value={tInit.t1} onChange={v=>setTInit({...tInit, t1: v})} label="Échantillon 1" labelClass="text-slate-500" />
+                   <RTKSelect value={tInit.t2} onChange={v=>setTInit({...tInit, t2: v})} label="Échantillon 2" labelClass="text-slate-500" />
+                   <RTKSelect value={tInit.t3} onChange={v=>setTInit({...tInit, t3: v})} label="Échantillon 3" labelClass="text-slate-500" />
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-slate-200">{renderInitGauge(avgInit)}</div>
+            </div>
+        </div>
+
+        <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Opérateur(s) de Production</label>
+            <input type="text" value={operateurs} onChange={e=>setOperateurs(e.target.value)} placeholder="Ex: Ousmane, Cheikh..." required className="w-full p-3 border-2 border-dashed border-gray-300 rounded-xl font-serif text-center" />
+        </div>
+
+        <button type="submit" disabled={!qty || qty <= 0} className={`w-full font-bold py-4 rounded-xl shadow-md transition-colors text-lg flex items-center justify-center gap-2 ${qty > 0 ? 'bg-[#0D3B48] hover:bg-slate-800 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
+            <Stamp size={20}/> {qty > 0 ? 'Broyer, Ioder et Envoyer au Labo' : 'Saisir les quantités'}
+        </button>
+     </form>
+  );
+};
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null); 
+  const [userType, setUserType] = useState('personnel'); 
+  const [erpData, setErpData] = useState(INITIAL_STATE);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [toast, setToast] = useState(null);
+  const [showPinModal, setShowPinModal] = useState(true);
+  const [pinInput, setPinInput] = useState('');
+  const [printDocument, setPrintDocument] = useState(null);
+  const [scannedLot, setScannedLot] = useState(null);
+  const [publicQrLotId, setPublicQrLotId] = useState(null);
+
+  const [smsQueue, setSmsQueue] = useState([]);
+  const [iotEnv, setIotEnv] = useState({ temp: 28.5, hum: 42.1, isAlert: false });
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+
+  const INIT_ACHAT = { saunier: '', items: [{ cible: 'fatickBrut', qty: 1000, prix: 30 }], montantPaye: 0, avanceUtilisee: 0, operateurs: '' };
+  const INIT_TRI = { brut: 0, trie: 0, operateurs: '' };
+  const INIT_LAVAGE = { brut: 0, seche: 0, operateurs: '' };
+  const INIT_CONDIT = { s50: 0, s25: 0, s1: 0, s05: 0, operateurs: '' };
+  
+  const INIT_VENTE = { items: [{ produit: 'Sel_50kg', qty: 1, prix: 7250 }], depot: 'usine', client: 'comptoir', besoinLivraison: false, adresse: '', montantEncaisse: 7250, operateurs: '' };
+  const INIT_B2B = { items: [{ produit: 'Sel_50kg', qty: 1 }] };
+  const INIT_FACTURE = { type: 'Loyer', montant: 0, desc: '' };
+
+  const [achatForm, setAchatForm] = useState(INIT_ACHAT);
+  const [triForm, setTriForm] = useState(INIT_TRI);
+  const [b2bForm, setB2bForm] = useState(INIT_B2B);
+  const [factureForm, setFactureForm] = useState({ type: 'Loyer', montant: 135000, desc: 'Loyer mensuel usine' });
+  const [lavageForm, setLavageForm] = useState(INIT_LAVAGE);
+  const [conditForm, setConditForm] = useState(INIT_CONDIT);
+  const [venteForm, setVenteForm] = useState(INIT_VENTE);
+
+  const [aromeForm, setAromeForm] = useState({ sel: 10, intrant: 1, operateurs: '' });
+  const [blocForm, setBlocForm] = useState({ freinte: 5, operateurs: '' });
+
+  const [actionModal, setActionModal] = useState(null); 
+  const [isExportVente, setIsExportVente] = useState(false);
+
+  useEffect(() => {
+     const interval = setInterval(() => {
+        setIotEnv(prev => {
+           const newTemp = prev.temp + (Math.random() - 0.5) * 0.5;
+           const newHum = prev.hum + (Math.random() - 0.5) * 1.5;
+           return { temp: newTemp, hum: newHum, isAlert: newHum > 60 };
+        });
+     }, 3000);
+     return () => clearInterval(interval);
+  }, []);
+
+  const triggerSMS = (destinataire, message) => {
+     const id = Date.now();
+     setSmsQueue(prev => [...prev, { id, destinataire, message }]);
+     setTimeout(() => setSmsQueue(prev => prev.filter(sms => sms.id !== id)), 6000);
+  };
+
+  useEffect(() => {
+     if (erpData.emballages?.sac50 < 100 && !erpData.autoPO?.find(po => po.produit === 'Sacs 50kg' && po.status === 'Draft')) {
+        updateErpState(data => {
+           if(!data.autoPO) data.autoPO = [];
+           data.autoPO.push({ id: `PO-AUTO-${Date.now()}`, date: new Date().toISOString(), fournisseur: 'Plastiques du Sénégal', produit: 'Sacs 50kg', qty: 1000, status: 'Draft' });
+        }, "Création automatique PO Sacs 50kg");
+        triggerSMS("Admin", "ALERTE STOCK: Rupture imminente Sacs 50kg. Bon de commande généré par l'IA.");
+     }
+  }, [erpData.emballages?.sac50]);
+
+  useEffect(() => {
+    if (!auth) return;
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+        else await signInAnonymously(auth);
+      } catch (e) { console.error(e); }
+    };
+    initAuth();
+    return onAuthStateChanged(auth, setUser);
+  }, []);
+
+  useEffect(() => {
+    if (!user || !db) return;
+    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'erp_state', 'master_state_v10');
+    getDoc(docRef).then(snap => { 
+      if (!snap.exists()) setDoc(docRef, INITIAL_STATE).catch(e => console.error(e)); 
+      else setDoc(docRef, mergeWithInitialState(snap.data()), { merge: true }).catch(e => console.error(e));
+    }).catch(e => console.error(e));
+    
+    return onSnapshot(docRef, (docSnap) => { 
+      if (docSnap.exists()) setErpData(mergeWithInitialState(docSnap.data())); 
+    }, (err) => { console.error(err); });
+  }, [user]);
+
+  const showToast = (msg, type = "success") => { 
+    const timeStamp = new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+    const userName = currentUser ? currentUser.nom.split(' ')[0] : 'Système';
+    const finalMsg = type === "success" ? `${msg} (Validé par ${userName} le ${timeStamp})` : msg;
+    setToast({ msg: finalMsg, type }); 
+    setTimeout(() => setToast(null), 4500); 
+  };
+
+  const updateErpState = async (updaterFunction, logMessage = null) => {
+    const updateLocalOnly = () => {
+        return new Promise((resolve) => {
+            setErpData(prev => {
+               let errorMsg = null;
+               const nextData = JSON.parse(JSON.stringify(mergeWithInitialState(prev)));
+               try { 
+                  updaterFunction(nextData); 
+                  if (logMessage) {
+                      if (!nextData.systemLogs) nextData.systemLogs = [];
+                      nextData.systemLogs.unshift({ id: `LOG-${Date.now()}`, date: new Date().toISOString(), user: currentUser?.nom || 'Système', action: logMessage });
+                      if (nextData.systemLogs.length > 200) nextData.systemLogs.length = 200;
+
+                      // Gamification : +1 réussite pour l'employé qui valide l'opération
+                      if (currentUser && currentUser.role && nextData.personnel) {
+                          const emp = nextData.personnel.find(p => p.id === currentUser.id);
+                          if (emp) emp.reussites = (emp.reussites || 0) + 1;
+                      }
+                  }
+               } 
+               catch (e) { console.error(e); errorMsg = typeof e === 'string' ? e : "Erreur inattendue."; resolve({ success: false, msg: errorMsg }); return prev; }
+               
+               if (nextData.transactions && prev.transactions && nextData.transactions.length > prev.transactions.length) {
+                   const diff = nextData.transactions.length - prev.transactions.length;
+                   for (let i = 0; i < diff; i++) {
+                       if (!nextData.transactions[i].auteur) nextData.transactions[i].auteur = currentUser?.nom || 'Système';
+                   }
+               }
+               resolve({ success: true }); return nextData;
+            });
+         }).then(res => { if (!res.success) showToast(res.msg, "error"); return res.success; });
+    };
+
+    if (!db || !user) return updateLocalOnly();
+    
+    try {
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'erp_state', 'master_state_v10');
+      await runTransaction(db, async (transaction) => {
+        const sfDoc = await transaction.get(docRef);
+        if (!sfDoc.exists()) throw "Document ERP manquant";
+        let data = mergeWithInitialState(sfDoc.data());
+        const prevLen = data.transactions ? data.transactions.length : 0;
+        
+        updaterFunction(data);
+        
+        if (logMessage) {
+            if (!data.systemLogs) data.systemLogs = [];
+            data.systemLogs.unshift({ id: `LOG-${Date.now()}`, date: new Date().toISOString(), user: currentUser?.nom || 'Système', action: logMessage });
+            if (data.systemLogs.length > 200) data.systemLogs.length = 200;
+
+            // Gamification : +1 réussite pour l'employé qui valide l'opération
+            if (currentUser && currentUser.role && data.personnel) {
+                const emp = data.personnel.find(p => p.id === currentUser.id);
+                if (emp) emp.reussites = (emp.reussites || 0) + 1;
+            }
+        }
+        transaction.update(docRef, data);
+      });
+      return true;
+    } catch (e) { 
+        return updateLocalOnly();
+    }
+  };
+
+  const canSee = (roles) => {
+     if (currentUser?.role === 'admin') return true; 
+     if (userType === 'client' || userType === 'public_qr' || userType === 'livreur') return false; 
+     return roles.includes(currentUser?.role);
+  }
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const foundEmp = erpData.personnel.find(p => p.pin === pinInput);
+    const foundClient = erpData.clients.find(c => c.pin === pinInput);
+    
+    if (pinInput === '0001') {
+       const lotPublic = erpData.lots.find(l => l.status === 'Conforme');
+       if(lotPublic) { setPublicQrLotId(lotPublic.id); setUserType('public_qr'); setShowPinModal(false); updateErpState(d => {}, `Scan public du lot ${lotPublic.id}`); return showToast("Scan QR Code Réussi !"); }
+       else return showToast("Aucun lot conforme disponible pour la démo QR", "error");
+    }
+
+    if (foundEmp) { 
+       setCurrentUser(foundEmp); 
+       if (foundEmp.role === 'livreur') { setUserType('livreur'); setActiveTab('livreur_dashboard'); }
+       else { setUserType('personnel'); setActiveTab('dashboard'); }
+       setShowPinModal(false); setPinInput(''); 
+       updateErpState(d => {}, `Connexion employé: ${foundEmp.nom}`);
+       showToast(`Bienvenue ${foundEmp.nom}`); 
+    }
+    else if (foundClient) { setCurrentUser(foundClient); setUserType('client'); setActiveTab('portail_client'); setShowPinModal(false); setPinInput(''); updateErpState(d => {}, `Connexion client B2B: ${foundClient.nom}`); showToast(`Espace B2B - ${foundClient.nom}`); }
+    else { showToast('Code PIN incorrect (Démo Admin: 1234)', 'error'); }
+  };
+
+  const calcTotalAchat = () => achatForm.items.reduce((acc, it) => acc + (it.qty * it.prix), 0);
+  
+  const handleAchatSaunier = async (e) => {
+    e.preventDefault(); 
+    const totalCalc = calcTotalAchat();
+    const paye = Number(achatForm.montantPaye) || 0;
+    const avance = Number(achatForm.avanceUtilisee) || 0;
+    const resteAPayer = totalCalc - paye - avance;
+
+    if (!achatForm.saunier || achatForm.items.length === 0 || paye < 0 || avance < 0) return showToast("Saisie invalide.", "error");
+    
+    updateErpState(data => {
+      const s = data.sauniers.find(x => x.id === achatForm.saunier);
+      if (!s) throw "Fournisseur introuvable.";
+      if (avance > (s.avance || 0)) throw `L'avance utilisée (${avance}F) dépasse l'avance disponible (${s.avance || 0}F).`;
+      if (paye > (data.tresorerie || 0)) throw "Trésorerie globale insuffisante pour ce paiement comptant.";
+      
+      for (let item of achatForm.items) {
+          const cat = ACHAT_CATALOG.find(c => c.id === item.cible);
+          if (cat) {
+              if (cat.type === 'stocks') data.stocks[item.cible] = Math.max(0, (data.stocks[item.cible] || 0) + item.qty);
+              if (cat.type === 'emballages') data.emballages[item.cible] = Math.max(0, (data.emballages[item.cible] || 0) + item.qty);
+          }
+      }
+      
+      data.tresorerie = Math.max(0, (data.tresorerie || 0) - paye);
+      s.avance = (s.avance || 0) - avance;
+      
+      if (resteAPayer > 0) s.dette = (s.dette || 0) + resteAPayer;
+      else if (resteAPayer < 0) s.avance = (s.avance || 0) + Math.abs(resteAPayer);
+
+      s.livraisons = (s.livraisons || 0) + 1; 
+      s.score = Math.min(100, (s.score || 0) + 2);
+      
+      const descItems = achatForm.items.map(i => `${i.qty}x ${ACHAT_CATALOG.find(c=>c.id===i.cible)?.nom}`).join(', ');
+      const ops = achatForm.operateurs || currentUser?.nom || 'Anonyme';
+      
+      data.transactions.unshift({ 
+          id: `ACH-${Date.now()}`, date: new Date().toISOString(), type: 'ACHAT', 
+          montant: -paye, items: achatForm.items, fournisseur: s.nom, auteur: ops,
+          desc: `Achat (${descItems}) (Ttl: ${totalCalc}F | Payé: ${paye}F | Avance: -${avance}F) [${paymentMethod.toUpperCase()}] - Intervenants: ${ops}` 
+      });
+    }, `Achat multi-produits enregistré (${totalCalc} F) par ${achatForm.operateurs || currentUser?.nom || 'Anonyme'}`).then(s => { 
+       if(s) { 
+          showToast(`Achat multi-produits enregistré !`); 
+          if(paymentMethod !== 'cash' && paye > 0) triggerSMS("Saunier", `Virement ${paymentMethod.toUpperCase()} de ${paye.toLocaleString()}F reçu pour livraison.`);
+          setAchatForm(INIT_ACHAT); 
+       } 
+    });
+  };
+
+  const handleTriNettoyage = async (e) => {
+    e.preventDefault(); const brut = Number(triForm.brut) || 0; const trie = Number(triForm.trie) || 0; const impurites = Math.max(0, brut - trie);
+    if (brut <= 0 || trie <= 0) return showToast("Quantités invalides.", "error");
+    updateErpState(data => {
+      if ((data.stocks.usineBrut || 0) < brut) throw `Stock de sel brut (usine) insuffisant.`;
+      if (impurites < 0) throw "Erreur : Sel trié obtenu > sel brut traité.";
+      data.stocks.usineBrut -= brut;
+      data.stocks.selTrie = (data.stocks.selTrie || 0) + trie;
+      data.stocks.freinte = (data.stocks.freinte || 0) + impurites;
+    }, `Tri & Nettoyage de ${brut} kg de brut par ${triForm.operateurs || currentUser?.nom || 'Anonyme'}`).then(s => { if(s) { showToast(`Tri terminé. ${impurites}kg d'impuretés éliminées et envoyées en freinte.`); setTriForm(INIT_TRI); } });
+  };
+
+  const handleLavageSaumure = async (e) => {
+    e.preventDefault(); const brut = Number(lavageForm.brut) || 0; const seche = Number(lavageForm.seche) || 0; const freinteCalc = Math.max(0, brut - seche);
+    if (brut <= 0 || seche <= 0) return showToast("Quantités invalides.", "error");
+    updateErpState(data => {
+      if ((data.stocks.selTrie || 0) < brut) throw `Stock de sel trié insuffisant. Veuillez trier du brut d'abord.`;
+      if (freinteCalc < 0) throw "Erreur : Sel purifié (lavé) > sel trié traité.";
+      data.stocks.selTrie = Math.max(0, data.stocks.selTrie - brut); 
+      data.stocks.freinte = Math.max(0, (data.stocks.freinte || 0) + freinteCalc); 
+      data.stocks.selLave = Math.max(0, (data.stocks.selLave || 0) + seche);
+    }, `Lavage de ${brut} kg de sel trié par ${lavageForm.operateurs || currentUser?.nom || 'Anonyme'}`).then(s => { if(s) { showToast(`Lavage OK. Freinte liquide/fines récupérée: ${freinteCalc} kg`); setLavageForm(INIT_LAVAGE); } });
+  };
+
+  const handleIodationMBI = (qty, kio3, operateurs, avgInit) => {
+    if (qty <= 0) return showToast("Quantité de sel invalide.", "error");
+    updateErpState(data => {
+      if ((data.stocks.selLave || 0) < qty) throw `Stock sel lavé insuffisant.`;
+      data.stocks.selLave = Math.max(0, data.stocks.selLave - qty); data.stocks.kio3 = Math.max(0, (data.stocks.kio3 || 0) - kio3);
+      const batchId = `LOT-${Date.now().toString().slice(-6)}`;
+      data.lots.unshift({ id: batchId, qty, resteKg: qty, kio3: kio3, prodTests: { avgInit }, operateurs: operateurs || currentUser?.nom || 'Anonyme', hash: btoa(`${batchId}-${qty}`).slice(0, 16), date: new Date().toISOString(), status: 'Attente Labo' });
+    }, `Production (Iodation) - Quantité: ${qty} kg par ${operateurs || currentUser?.nom || 'Anonyme'}`).then(s => { if(s) { showToast(`Lot iodé validé en prod, envoyé au Labo pour test final.`); } });
+  };
+
+  const handleProdAromatise = async (e) => {
+    e.preventDefault(); const sel = Number(aromeForm.sel) || 0; const intrant = Number(aromeForm.intrant) || 0;
+    if (sel <= 0 || intrant <= 0) return showToast("Saisie invalide", "error");
+    updateErpState(data => {
+        if ((data.stocks.selLave || 0) < sel) throw "Stock de sel purifié insuffisant";
+        if ((data.stocks.intrantsAromes || 0) < intrant) throw "Stock d'intrants (Herbes/Piment) insuffisant";
+        data.stocks.selLave -= sel;
+        data.stocks.intrantsAromes -= intrant;
+        const pots = Math.floor(sel * 4);
+        data.produitsFinis['Aromatise_Premium'] = (data.produitsFinis['Aromatise_Premium'] || 0) + pots;
+    }, `Production Sel Aromatisé Premium (${sel} kg) par ${aromeForm.operateurs || currentUser?.nom || 'Anonyme'}`).then(s => { if(s) { showToast(`Phase 2 : ${Math.floor(sel * 4)} pots Premium créés !`); setAromeForm({sel: 10, intrant: 1, operateurs: ''}); } });
+  };
+
+  const handleProdBloc = async (e) => {
+    e.preventDefault(); const qtyFreinte = Number(blocForm.freinte) || 0;
+    if (qtyFreinte < 5) return showToast("Il faut minimum 5kg de freinte par bloc", "error");
+    updateErpState(data => {
+        if ((data.stocks.freinte || 0) < qtyFreinte) throw "Stock de freinte insuffisant";
+        const blocs = Math.floor(qtyFreinte / 5);
+        data.stocks.freinte -= (blocs * 5); 
+        data.produitsFinis['Bloc_Betail'] = (data.produitsFinis['Bloc_Betail'] || 0) + blocs;
+    }, `Transformation de ${qtyFreinte} kg freinte en blocs bétail par ${blocForm.operateurs || currentUser?.nom || 'Anonyme'}`).then(s => { if(s) { showToast(`Zéro Déchet : ${Math.floor(qtyFreinte / 5)} blocs bétail fabriqués !`); setBlocForm({freinte: 5, operateurs: ''}); } });
+  };
+
+  const handleConditionnement = async (e) => {
+    e.preventDefault(); if(!scannedLot) return showToast("Veuillez sélectionner un lot valide.", "error");
+    const s50 = Number(conditForm.s50) || 0; const s25 = Number(conditForm.s25) || 0; const s1 = Number(conditForm.s1) || 0; const s05 = Number(conditForm.s05) || 0; 
+    const totalKg = (s50 * 50) + (s25 * 25) + (s1 * 1) + (s05 * 0.5);
+    if (totalKg <= 0) return showToast("Saisissez au moins une quantité à emballer.", "error");
+    updateErpState(data => {
+      const lot = data.lots.find(l => l.id === scannedLot.id);
+      if(!lot || (lot.resteKg || 0) < totalKg) throw `Stock du lot insuffisant. Restant: ${lot?.resteKg || 0} kg.`;
+      if(lot.status !== 'Conforme') throw "Ce lot n'a pas été validé par le laboratoire.";
+      if (s50 > 0 && (data.emballages.sac50 || 0) < s50) throw `Plus de sacs 50kg vides en stock.`;
+      if (s25 > 0 && (data.emballages.sac25 || 0) < s25) throw `Plus de sacs 25kg vides.`;
+      if (s1 > 0 && (data.emballages.sachet1kg || 0) < s1) throw `Plus de sachets imprimés 1kg.`;
+      if (s05 > 0 && (data.emballages.sachet500g || 0) < s05) throw `Plus de sachets imprimés 500g.`;
+
+      lot.resteKg = Math.max(0, lot.resteKg - totalKg);
+      data.produitsFinis['Sel_50kg'] = Math.max(0, (data.produitsFinis['Sel_50kg'] || 0) + s50); data.produitsFinis['Sel_25kg'] = Math.max(0, (data.produitsFinis['Sel_25kg'] || 0) + s25);
+      data.produitsFinis['Sachet_1kg'] = Math.max(0, (data.produitsFinis['Sachet_1kg'] || 0) + s1); data.produitsFinis['Sachet_500g'] = Math.max(0, (data.produitsFinis['Sachet_500g'] || 0) + s05);
+      data.emballages.sac50 = Math.max(0, (data.emballages.sac50 || 0) - s50); data.emballages.sac25 = Math.max(0, (data.emballages.sac25 || 0) - s25); data.emballages.sachet1kg = Math.max(0, (data.emballages.sachet1kg || 0) - s1); data.emballages.sachet500g = Math.max(0, (data.emballages.sachet500g || 0) - s05);
+    }, `Conditionnement du lot ${scannedLot.id} (${totalKg} kg) par ${conditForm.operateurs || currentUser?.nom || 'Anonyme'}`).then(s => { if(s) { showToast("Conditionnement réussi"); setScannedLot(null); setConditForm(INIT_CONDIT); } });
+  };
+
+  const calcTotalVente = (items) => items.reduce((acc, it) => acc + (it.qty * it.prix), 0);
+
+  const handleVente = async (e) => {
+    e.preventDefault(); 
+    const { depot, client, besoinLivraison, adresse } = venteForm; 
+    const total = calcTotalVente(venteForm.items);
+    const encaisse = Number(venteForm.montantEncaisse) || 0;
+    const aCredit = total - encaisse;
+
+    if (venteForm.items.length === 0 || encaisse < 0 || encaisse > total) return showToast("Panier ou encaissement invalide.", "error");
+    
+    if (erpData.config?.forcePaiementComptant && aCredit > 0) {
+       return showToast("ERREUR BP : La politique d'entreprise interdit le crédit partiel ou total.", "error");
+    }
+
+    updateErpState(data => {
+      for (let item of venteForm.items) {
+          if (item.qty <= 0) throw "La quantité d'un produit doit être > 0.";
+          if (depot === 'usine') {
+            if ((data.produitsFinis[item.produit] || 0) < item.qty) throw `Stock usine insuffisant pour ${item.produit}.`; 
+          } else {
+            const d = data.depots.find(dp => dp.id === depot); 
+            if (!d || (d.stocks[item.produit] || 0) < item.qty) throw `Stock du dépôt insuffisant pour ${item.produit}.`;
+          }
+      }
+
+      for (let item of venteForm.items) {
+          if (depot === 'usine') {
+            data.produitsFinis[item.produit] -= item.qty;
+          } else {
+            const d = data.depots.find(dp => dp.id === depot); 
+            d.stocks[item.produit] -= item.qty;
+          }
+      }
+      
+      let clientName = "Comptoir / Marché";
+      if (client !== "comptoir") {
+         const cli = data.clients.find(c => c.id === client);
+         if(cli) {
+            clientName = cli.nom; cli.totalAchats = Math.max(0, (cli.totalAchats || 0) + total);
+            if (aCredit > 0) {
+               if ((cli.dette || 0) + aCredit > (cli.plafond || 0)) throw `Plafond de dette dépassé.`;
+               cli.dette = Math.max(0, (cli.dette || 0) + aCredit);
+            }
+         }
+      } else if (aCredit > 0) throw "Un client enregistré (CRM) est requis pour un paiement partiel (crédit).";
+
+      const descProduits = venteForm.items.map(i => `${i.qty}x ${i.produit.replace('_', ' ')}`).join(', ');
+      const ops = venteForm.operateurs || currentUser?.nom || 'Anonyme';
+
+      if (besoinLivraison) {
+         if (!data.livraisonsEnCours) data.livraisonsEnCours = [];
+         data.livraisonsEnCours.push({ id: `LIV-${Date.now()}`, client: clientName, adresse, items: venteForm.items, montant: total, aEncaisser: aCredit, status: 'En route', chauffeur: 'Moussa', gps: {lat: 14.7, lng: -17.4} });
+         if (encaisse > 0) {
+            data.tresorerie += encaisse;
+            data.transactions.unshift({ id: `FACT-AV-${Date.now()}`, date: new Date().toISOString(), type: 'VENTE', montant: encaisse, items: venteForm.items, desc: `Acompte Livraison (${descProduits}) [${paymentMethod}] - Vendeur: ${ops}`, client: clientName, isExport: isExportVente, auteur: ops });
+         }
+      } else {
+         data.tresorerie += encaisse;
+         data.transactions.unshift({ id: `FACT-${Date.now()}`, date: new Date().toISOString(), type: 'VENTE', montant: encaisse, items: venteForm.items, desc: `Vente (${descProduits}) (Ttl: ${total}F | Payé: ${encaisse}F) [${paymentMethod}] - Vendeur: ${ops}`, client: clientName, isExport: isExportVente, auteur: ops });
+      }
+    }, `Vente enregistrée - Total: ${total} F par ${venteForm.operateurs || currentUser?.nom || 'Anonyme'}`).then(s => { 
+       if(s) { 
+          showToast(besoinLivraison ? "Vente validée et envoyée en Livraison !" : `Vente enregistrée (${encaisse}F encaissés) !`); 
+          if(besoinLivraison) triggerSMS("Client", `S&V: Votre commande est en route. Reste à payer: ${(aCredit).toLocaleString()}F.`);
+          else if (paymentMethod !== 'cash' && encaisse > 0) triggerSMS("Client", `S&V: Reçu de paiement ${paymentMethod.toUpperCase()} de ${(encaisse).toLocaleString()}F bien reçu. Merci.`);
+          setVenteForm(INIT_VENTE); setIsExportVente(false); 
+       } 
+    });
+  };
+
+  const handleClientOrder = (e) => {
+    e.preventDefault(); 
+    if (b2bForm.items.length === 0) return showToast("Panier vide.", "error");
+    updateErpState(data => { data.commandesB2B.unshift({ id: `CMD-${Date.now()}`, date: new Date().toISOString(), client: currentUser.nom, clientId: currentUser.id, items: b2bForm.items, status: 'En Attente' }); }, `Nouvelle commande B2B client: ${currentUser.nom}`).then(s => { if(s) { showToast("Commande transmise."); setB2bForm(INIT_B2B); }});
+  };
+
+  const validerCommandeB2B = (cmdId) => {
+    updateErpState(data => {
+       const cmd = data.commandesB2B.find(c => c.id === cmdId); if(!cmd) throw "Erreur";
+       
+       const itemsToProcess = cmd.items || [{ produit: cmd.produit, qty: cmd.qty }];
+       for(let item of itemsToProcess) { if((data.produitsFinis[item.produit] || 0) < item.qty) throw `Stock Usine insuffisant pour ${item.produit}.`; }
+       
+       let val = 0;
+       for(let item of itemsToProcess) {
+           data.produitsFinis[item.produit] -= item.qty;
+           val += item.qty * getBpPrice(item.produit);
+       }
+       cmd.status = 'Expédiée';
+       
+       const client = data.clients.find(c => c.id === cmd.clientId);
+       if(client) client.dette = Math.max(0, (client.dette || 0) + val); 
+       
+       const descProduits = itemsToProcess.map(i => `${i.qty}x ${i.produit.replace('_', ' ')}`).join(', ');
+       data.transactions.unshift({ id: `FACT-${Date.now()}`, date: new Date().toISOString(), type: 'VENTE', montant: val, desc: `Commande E-Portail (${descProduits})`, client: client?.nom || 'Client', items: itemsToProcess });
+    }, `Expédition commande B2B: ${cmdId}`).then(s => {
+       if (s) {
+          showToast("Commande expédiée.");
+          triggerSMS("Client", `S&V: Votre commande E-Portail a été expédiée. La dette de votre compte a été mise à jour.`);
+       }
+    });
+  };
+
+  const handlePaiementFacture = async (e) => {
+     e.preventDefault(); const { type, desc } = factureForm; const montant = Number(factureForm.montant) || 0;
+     if (montant <= 0) return showToast("Montant invalide.", "error");
+     updateErpState(data => {
+        if ((data.tresorerie || 0) < montant) throw `Fonds insuffisants.`;
+        data.tresorerie = Math.max(0, data.tresorerie - montant);
+        data.transactions.unshift({ id: `FRAIS-${Date.now()}`, date: new Date().toISOString(), type: 'FACTURE', montant: -montant, desc: `[${type}] ${desc}` });
+     }, `Paiement de facture (Frais Généraux) : ${type}`).then(s => { if(s) { showToast("Facture réglée."); setFactureForm(INIT_FACTURE); } });
+  };
+
+  const handleValidationLabo = async (lotId, iode, controleur) => {
+     const isConforme = (iode >= 30 && iode <= 50);
+     updateErpState(data => {
+        const lot = data.lots.find(l => l.id === lotId); if(!lot) throw "Lot inconnu";
+        lot.labo = { humidite: 2.1, iode: Number(iode.toFixed(2)), insolubles: 0.1, validateur: controleur }; lot.status = isConforme ? 'Conforme' : 'Quarantaine';
+        
+        if (!isConforme) {
+           if (!data.qhse.nonConformites) data.qhse.nonConformites = [];
+           data.qhse.nonConformites.unshift({ id: `NC-${Date.now().toString().slice(-6)}`, date: new Date().toISOString(), lotId: lot.id, desc: `Échec qualité Lot ${lot.id}. Iode: ${iode.toFixed(1)}ppm`, actionCorrective: '', status: 'Ouvert', reporter: controleur });
+        }
+     }, `Validation Qualité pour le lot ${lotId} (${iode.toFixed(1)} ppm)`).then(s => s && showToast(isConforme ? `Lot validé par ${controleur} (${iode.toFixed(1)} ppm)` : `ALERTE: Lot en Quarantaine (${iode.toFixed(1)} ppm). Fiche NC générée.`, isConforme ? "success" : "error"));
+  }
+
+  const submitAdminGlobalEdit = (e, section) => {
+     e.preventDefault(); const formData = new FormData(e.target);
+     updateErpState(data => {
+        if (section === 'treasury') data.tresorerie = Number(formData.get('tresorerie'));
+        if (section === 'stocks') {
+           data.stocks.fatickBrut = Number(formData.get('fatickBrut')); data.stocks.usineBrut = Number(formData.get('usineBrut'));
+           data.stocks.selTrie = Number(formData.get('selTrie'));
+           data.stocks.freinte = Number(formData.get('freinte')); data.stocks.selLave = Number(formData.get('selLave'));
+           data.stocks.intrantsAromes = Number(formData.get('intrantsAromes'));
+        }
+     }, `Paramètres globaux modifiés: ${section}`).then(s => s && showToast("Mise à jour forcée appliquée !"));
+  };
+
+  const submitEntityEditModal = (e) => {
+     e.preventDefault(); const formData = new FormData(e.target);
+     updateErpState(data => {
+        if (actionModal.type === 'edit_rh' || actionModal.type === 'prime' || actionModal.type === 'avance') {
+           if (actionModal.type === 'prime' || actionModal.type === 'avance') {
+              const amount = Number(formData.get('amount'));
+              if(actionModal.type === 'avance') { if ((data.tresorerie || 0) < amount) throw "Trésorerie insuffisante"; data.tresorerie -= amount; data.transactions.unshift({ id: `AV-${Date.now()}`, date: new Date().toISOString(), type: 'AVANCE', montant: -amount, desc: `Avance - ${actionModal.emp.nom}` }); }
+              const emp = data.personnel.find(p => p.id === actionModal.emp.id);
+              if(emp) emp[actionModal.type === 'prime' ? 'primes' : 'avances'] = (emp[actionModal.type === 'prime' ? 'primes' : 'avances'] || 0) + amount;
+           } else {
+              const id = actionModal.emp?.id || `p${Date.now()}`;
+              const newObj = { 
+                  id, nom: formData.get('nom'), role: formData.get('role'), pin: formData.get('pin'), type: formData.get('type'), modeRemuneration: formData.get('modeRemuneration'),
+                  salaire: Number(formData.get('salaire'))||0, prixVoyage: Number(formData.get('prixVoyage'))||0, tauxJournalier: Number(formData.get('tauxJournalier'))||0, pourcentageBenefice: Number(formData.get('pourcentageBenefice'))||0,
+                  primes: Number(formData.get('primes'))||0, avances: Number(formData.get('avances'))||0, reussites: actionModal.emp?.reussites || 0, voyagesCumules: actionModal.emp?.voyagesCumules || 0, joursTravailles: actionModal.emp?.joursTravailles || 0
+              };
+              if(actionModal.emp?.id) data.personnel = data.personnel.map(p => p.id === id ? newObj : p); else data.personnel.push(newObj);
+           }
+        } else if (actionModal.type === 'edit_client') {
+            const id = actionModal.obj?.id || `c${Date.now()}`;
+            const newObj = { id, nom: formData.get('nom'), pin: formData.get('pin'), type: formData.get('type'), plafond: Number(formData.get('plafond')), dette: Number(formData.get('dette')), totalAchats: actionModal.obj?.totalAchats || 0 };
+            if(actionModal.obj?.id) data.clients = data.clients.map(c => c.id === id ? newObj : c); else data.clients.push(newObj);
+        } else if (actionModal.type === 'edit_saunier') {
+            const id = actionModal.obj?.id || `s${Date.now()}`;
+            const newObj = { 
+                id, 
+                nom: formData.get('nom'), 
+                telephone: formData.get('telephone') || '',
+                score: Number(formData.get('score')) || 50, 
+                avance: Number(formData.get('avance')) || 0, 
+                dette: Number(formData.get('dette')) || 0,
+                livraisons: actionModal.obj?.livraisons || 0 
+            };
+            if(actionModal.obj?.id) data.sauniers = data.sauniers.map(s => s.id === id ? newObj : s); else data.sauniers.push(newObj);
+        } else if (actionModal.type === 'edit_doc') {
+            const id = actionModal.obj?.id || `doc${Date.now()}`;
+            const newObj = { id, nom: formData.get('nom'), ref: formData.get('ref'), dateExpiration: formData.get('dateExpiration'), status: 'Actif' };
+            if(actionModal.obj?.id) data.documentsLegaux = data.documentsLegaux.map(d => d.id === id ? newObj : d); else data.documentsLegaux.push(newObj);
+        } else if (actionModal.type === 'edit_machine') {
+            const id = actionModal.obj?.id || `m${Date.now()}`;
+            const newObj = { id, machine: formData.get('machine'), status: formData.get('status'), lastMaintenance: formData.get('lastMaintenance'), tonnageProcess: Number(formData.get('tonnageProcess')), alert: formData.get('status') !== 'Opérationnel' };
+            if(actionModal.obj?.id) data.maintenance = data.maintenance.map(m => m.id === id ? newObj : m); else data.maintenance.push(newObj);
+        } else if (actionModal.type === 'avance_saunier') {
+            const val = Number(formData.get('amount')) || 0;
+            const method = formData.get('method') || 'Espèces';
+            if (val > 0) {
+               if ((data.tresorerie || 0) < val) throw "Trésorerie globale insuffisante.";
+               const s = data.sauniers.find(x => x.id === actionModal.obj.id);
+               if (!s) throw "Saunier introuvable.";
+               s.avance = (s.avance || 0) + val;
+               data.tresorerie = Math.max(0, (data.tresorerie || 0) - val);
+               data.transactions.unshift({ id: `AVS-${Date.now()}`, date: new Date().toISOString(), type: 'ACHAT', montant: -val, desc: `Avance saunier ${s.nom} [${method}]` });
+               triggerSMS("Saunier", `S&V : Votre avance de ${val.toLocaleString()}F a été positionnée sur votre compte via ${method}.`);
+            }
+        } else if (actionModal.type === 'payer_dette') {
+            const val = Number(formData.get('amount')) || 0;
+            if (val > 0) {
+               const saunier = data.sauniers.find(x => x.id === actionModal.obj.id);
+               if (data.tresorerie < val) throw "Trésorerie insuffisante.";
+               if (val > (saunier.dette || 0)) throw "Montant supérieur à la dette due.";
+               saunier.dette -= val;
+               data.tresorerie -= val;
+               data.transactions.unshift({ id: `RMB-FRN-${Date.now()}`, date: new Date().toISOString(), type: 'ACHAT', montant: -val, desc: `Remboursement Dette Fournisseur ${saunier.nom}` });
+            }
+        } else if (actionModal.type === 'remboursement') {
+            const mnt = Number(formData.get('amount')) || 0;
+            if(mnt > 0) {
+               const cl = data.clients.find(x => x.id === actionModal.obj.id); 
+               if(!cl) throw "Client introuvable."; 
+               const rmb = Math.min(mnt, cl.dette || 0); 
+               cl.dette = Math.max(0, cl.dette - rmb); 
+               data.tresorerie = Math.max(0, (data.tresorerie || 0) + rmb); 
+               data.transactions.unshift({ id: `RMB-${Date.now()}`, date: new Date().toISOString(), type: 'VENTE', montant: rmb, desc: `Remboursement Dette - ${cl.nom}` });
+            }
+        } else if (actionModal.type === 'edit_nc') {
+            const id = actionModal.obj?.id || `NC-${Date.now().toString().slice(-6)}`;
+            const isNew = !actionModal.obj?.id;
+            const newObj = {
+                id,
+                desc: formData.get('desc'),
+                actionCorrective: formData.get('actionCorrective'),
+                status: formData.get('status'),
+                date: actionModal.obj?.date || new Date().toISOString(),
+                lotId: actionModal.obj?.lotId || null,
+                reporter: actionModal.obj?.reporter || currentUser?.nom
+            };
+            
+            const applyRaw = formData.get('applyCorrection');
+            if (applyRaw && newObj.lotId) {
+                const calc = JSON.parse(applyRaw);
+                const lot = data.lots.find(l => l.id === newObj.lotId);
+                if (lot) {
+                    if (calc.type === 'kio3') {
+                        if ((data.stocks.kio3 || 0) < calc.val) throw "Stock de KIO3 insuffisant pour la correction.";
+                        data.stocks.kio3 = Math.max(0, data.stocks.kio3 - calc.val);
+                    } else if (calc.type === 'sel') {
+                        if ((data.stocks.selLave || 0) < calc.val) throw "Stock de Sel Lavé insuffisant pour diluer le lot.";
+                        data.stocks.selLave = Math.max(0, data.stocks.selLave - calc.val);
+                        lot.qty += Math.round(calc.val);
+                        lot.resteKg += Math.round(calc.val);
+                    }
+                    lot.labo.iode = 40;
+                    lot.status = 'Conforme';
+                    newObj.status = 'Résolu';
+                    newObj.actionCorrective = `[Correction Automatique] ${calc.text}. Résultat ramené à 40 ppm.`;
+                }
+            }
+
+            if(!data.qhse.nonConformites) data.qhse.nonConformites = [];
+            
+            if(isNew) data.qhse.nonConformites.unshift(newObj);
+            else {
+                data.qhse.nonConformites = data.qhse.nonConformites.map(n => n.id === id ? newObj : n);
+                if (newObj.lotId && newObj.status === 'Résolu' && !applyRaw) {
+                    const linkedLot = data.lots.find(l => l.id === newObj.lotId);
+                    if (linkedLot && linkedLot.status === 'Quarantaine') linkedLot.status = 'Conforme';
+                }
+            }
+        }
+     }, `Action Modale / Formulaire: ${actionModal?.type}`).then(success => {
+         if (success) {
+             showToast("Modification enregistrée !");
+             setActionModal(null);
+         }
+     });
+  };
+
+  const imprimerDocument = (type, data) => {
+      const num = Date.now().toString().slice(-4);
+      const cachet = currentUser ? currentUser.nom : 'Système';
+      setPrintDocument({ type, data, date: new Date().toLocaleString(), cachet, num });
+  };
+
+  const telechargerPDF = () => {
+      const element = document.getElementById('print-area');
+      if (element) {
+          const opt = { margin: 0, filename: `Document_SEL_VIE_${Date.now()}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } };
+          if (window.html2pdf) {
+              window.html2pdf().set(opt).from(element).save();
+              showToast("PDF généré avec succès !");
+          } else {
+              const script = document.createElement('script');
+              script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+              script.onload = () => {
+                  window.html2pdf().set(opt).from(element).save();
+                  showToast("PDF généré avec succès !");
+              };
+              script.onerror = () => showToast("Erreur lors du chargement du module PDF.", "error");
+              document.body.appendChild(script);
+          }
+      }
+  };
+  
+  const getPnl = () => {
+     let ca = 0, achats = 0, salaires = 0, facturesFraisFixes = 0, capex = 0;
+     (erpData.transactions || []).forEach(t => {
+        if(t.type === 'VENTE' && (t.montant || 0) > 0) ca += t.montant;
+        if(t.type === 'ACHAT' && (t.montant || 0) < 0) { if (t.isCapex || t.desc?.includes('CAPEX')) capex += Math.abs(t.montant); else achats += Math.abs(t.montant); }
+        if(t.type === 'AVANCE' && (t.montant || 0) < 0) salaires += Math.abs(t.montant);
+        if(t.type === 'FACTURE' && (t.montant || 0) < 0) facturesFraisFixes += Math.abs(t.montant); 
+     });
+     const totalBaseSalaire = (erpData.personnel || []).reduce((acc, p) => p.modeRemuneration === 'mois' ? acc + (p.salaire || 0) : acc, 0); 
+     salaires += totalBaseSalaire;
+     const margeB = ca - achats; const resultatNet = margeB - salaires - facturesFraisFixes;
+     return { ca, achats, salaires, facturesFraisFixes, capex, margeB, resultatNet };
+  };
+
+  const tonnageVendu = (erpData.transactions || []).filter(t => t.type === 'VENTE').reduce((acc, t) => {
+     if (t.items) return acc + t.items.reduce((sum, item) => sum + (item.qty * getKgMultiplier(item.produit)), 0);
+     return acc + ((t.qty || 0) * getKgMultiplier(t.produit));
+  }, 0);
+  const objTonnage = 86400; const pctTonnage = Math.min(100, (tonnageVendu / objTonnage) * 100);
+
+  const exportFacturesCSV = () => {
+     const ventes = (erpData.transactions || []).filter(t => t.type === 'VENTE');
+     const header = "ID,Date,Client,Description,Montant_FCFA\n";
+     const csv = ventes.map(t => `${t.id},"${t.date}","${t.client || ''}","${t.desc || ''}",${t.montant}`).join("\n");
+     const blob = new Blob([header + csv], { type: 'text/csv;charset=utf-8;' });
+     const link = document.createElement("a");
+     link.href = URL.createObjectURL(blob);
+     link.download = `Factures_Sel_Et_Vie_${new Date().toISOString().slice(0,10)}.csv`;
+     link.click();
+  };
+
+  const exportRegistreCSV = () => {
+     const header = "ID,Date,Type,Montant_FCFA,Description\n";
+     const csv = (erpData.transactions || []).map(t => `${t.id},"${t.date}","${t.type}",${t.montant},"${t.desc || ''}"`).join("\n");
+     const blob = new Blob([header + csv], { type: 'text/csv;charset=utf-8;' });
+     const link = document.createElement("a");
+     link.href = URL.createObjectURL(blob);
+     link.download = `Registre_Operations_${new Date().toISOString().slice(0,10)}.csv`;
+     link.click();
+  };
+
+  const exportFacturesJSON = () => {
+     const ventes = (erpData.transactions || []).filter(t => t.type === 'VENTE');
+     const blob = new Blob([JSON.stringify(ventes, null, 2)], { type: 'application/json' });
+     const link = document.createElement("a");
+     link.href = URL.createObjectURL(blob);
+     link.download = `Backup_Factures_${new Date().toISOString().slice(0,10)}.json`;
+     link.click();
+  };
+
+  const exportSYSCOHADA = () => {
+     const rows = ["Date,Compte,Intitule,Debit,Credit,Ref"];
+     (erpData.transactions || []).forEach(t => {
+        const d = new Date(t.date).toLocaleDateString('fr-FR');
+        if (t.type === 'VENTE') {
+           rows.push(`${d},4111,Clients,${t.montant},0,${t.id}`);
+           rows.push(`${d},7011,Ventes Sel Fini,0,${t.montant},${t.id}`);
+        } else if (t.type === 'ACHAT') {
+           rows.push(`${d},6011,Achats Mat. Premières,${Math.abs(t.montant)},0,${t.id}`);
+           rows.push(`${d},4011,Fournisseurs,0,${Math.abs(t.montant)},${t.id}`);
+        } else if (t.type === 'FACTURE') {
+           rows.push(`${d},6200,Services Extérieurs,${Math.abs(t.montant)},0,${t.id}`);
+           rows.push(`${d},5211,Banque/Caisse,0,${Math.abs(t.montant)},${t.id}`);
+        }
+     });
+     const blob = new Blob([rows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+     const link = document.createElement("a");
+     link.href = URL.createObjectURL(blob);
+     link.download = `Export_Comptable_SYSCOHADA_${new Date().toISOString().slice(0,10)}.csv`;
+     link.click();
+     showToast("Génération du fichier SYSCOHADA réussie !");
+  };
+
+  const importFacturesJSON = (e) => {
+     const file = e.target.files[0];
+     if (!file) return;
+     const reader = new FileReader();
+     reader.onload = (event) => {
+        try {
+           const importedData = JSON.parse(event.target.result);
+           if (Array.isArray(importedData)) {
+              updateErpState(data => {
+                 let count = 0;
+                 importedData.forEach(fact => {
+                    if (!data.transactions.find(t => t.id === fact.id)) {
+                       data.transactions.push(fact);
+                       data.tresorerie = (data.tresorerie || 0) + Number(fact.montant || 0);
+                       count++;
+                    }
+                 });
+                 data.transactions.sort((a,b) => new Date(b.date) - new Date(a.date));
+                 if (count > 0) showToast(`${count} factures importées avec succès !`);
+                 else showToast("Aucune nouvelle facture à importer (doublons ignorés).", "error");
+              }, `Import JSON: ${file.name}`);
+           }
+        } catch(err) {
+           showToast("Erreur: Format JSON invalide", "error");
+        }
+     };
+     reader.readAsText(file);
+     e.target.value = ''; 
+  };
+
+  const docsCritiques = (erpData.documentsLegaux || []).filter(d => new Date(d.dateExpiration).getTime() < Date.now() + (86400000 * 30));
+
+  if (userType === 'public_qr' && !showPinModal) {
+      const lotInfo = erpData.lots.find(l => l.id === publicQrLotId);
+      if(!lotInfo) return <div className="p-10 text-center">Lot introuvable</div>;
+      return (
+         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+            <header className="bg-white shadow-sm p-4 flex justify-center items-center flex-col pt-8"><LogoComponent sizeClass="w-20 h-20 mb-4" /><h1 className="text-2xl font-black text-[#0D3B48] tracking-widest uppercase">SEL & VIE</h1><p className="text-[#C29B38] font-bold text-sm">Le Sel Fin Iodé Sénégalais</p></header>
+            <main className="flex-1 p-6 max-w-md mx-auto w-full space-y-6">
+               <div className="bg-white p-6 rounded-2xl shadow-lg border-t-8 border-[#2EC4B6] text-center"><ScanFace size={48} className="mx-auto text-[#2EC4B6] mb-4" /><h2 className="text-xl font-bold text-gray-800 mb-2">Authenticité Vérifiée</h2><p className="text-gray-500 text-sm">Vous avez scanné un produit original SEL & VIE.</p></div>
+               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+                  <h3 className="font-bold text-[#0D3B48] border-b pb-2 flex justify-between items-center">Traçabilité du Lot <Database size={16} className="text-blue-500"/></h3>
+                  <div className="flex justify-between items-center text-sm"><span className="text-gray-500">ID du Lot</span><span className="font-mono font-bold">{lotInfo.id}</span></div>
+                  <div className="flex justify-between items-center text-sm"><span className="text-gray-500">Origine Sel Brut</span><span className="font-bold">Fatick, Sénégal 🇸🇳</span></div>
+                  <div className="flex justify-between items-center text-sm"><span className="text-gray-500">Conditionné le</span><span className="font-bold">{new Date(lotInfo.date).toLocaleDateString()}</span></div>
+                  <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+                     <p className="text-xs font-bold text-indigo-800 mb-1 flex items-center gap-1"><ShieldCheck size={14}/> Scellé sur Blockchain Polygon</p>
+                     <div className="flex justify-between items-center text-xs"><span className="text-gray-500">Tx Hash:</span><span className="font-mono text-indigo-600 bg-white px-2 py-1 rounded shadow-sm break-all">{lotInfo.hash}</span></div>
+                  </div>
+               </div>
+               <div className="bg-gradient-to-b from-green-50 to-white rounded-2xl shadow-sm border border-green-200 p-6 space-y-4">
+                  <h3 className="font-bold text-green-800 border-b border-green-200 pb-2 flex items-center gap-2"><CheckCircle size={18}/> Contrôle Qualité Interne</h3>
+                  <div className="flex justify-between items-center text-sm"><span className="text-gray-600">Taux d'Iode (KIO3)</span><span className="font-black text-green-700">{lotInfo.labo?.iode} ppm</span></div>
+                  <div className="flex justify-between items-center text-sm"><span className="text-gray-600">Taux d'humidité</span><span className="font-bold">{lotInfo.labo?.humidite || 'N/A'} %</span></div>
+                  <div className="mt-4 pt-4 border-t border-green-200 text-center"><p className="text-xs text-gray-500 mb-1">Validé par l'expert Qualité :</p><p className="font-serif italic font-bold text-lg text-gray-800">{lotInfo.labo?.validateur}</p></div>
+               </div>
+               <button onClick={() => { setUserType('personnel'); setShowPinModal(true); setPublicQrLotId(null); }} className="w-full text-center text-sm text-gray-400 mt-8 hover:text-gray-600 underline">Retour à la connexion</button>
+            </main>
+         </div>
+      );
+  }
+
+  if (userType === 'livreur' && !showPinModal) {
+     return (
+        <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+           <header className="bg-[#0D3B48] text-white p-4 shadow-md flex justify-between items-center">
+              <div className="flex items-center gap-3"><Truck className="w-8 h-8 text-[#2EC4B6]"/><div><h1 className="font-bold text-xl text-[#C29B38]">Espace Livreur</h1><p className="text-xs flex items-center gap-1"><Wifi size={12} className="text-green-400"/> Connecté: {currentUser.nom} (GPS Actif)</p></div></div>
+              <button onClick={() => { setCurrentUser(null); setUserType('personnel'); setShowPinModal(true); }} className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20"><LogOut size={16}/> Quitter</button>
+           </header>
+           <main className="flex-1 p-6 max-w-lg mx-auto w-full space-y-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 relative overflow-hidden h-40 flex items-center justify-center bg-blue-50">
+                 <div className="absolute inset-0 opacity-20" style={{backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' viewBox=\'0 0 100 100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M10 10 h 80 v 80 h -80 Z\' fill=\'none\' stroke=\'%230D3B48\' stroke-width=\'1\'/%3E%3Cpath d=\'M30 10 v 80 M50 10 v 80 M70 10 v 80 M10 30 h 80 M10 50 h 80 M10 70 h 80\' stroke=\'%230D3B48\' stroke-width=\'0.5\'/%3E%3C/svg%3E")'}}></div>
+                 <div className="z-10 flex flex-col items-center animate-pulse"><Map size={32} className="text-blue-600"/><span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded-full mt-2 shadow-lg">Google Maps API (Simulée) - Suivi Flotte</span></div>
+              </div>
+              <div className="bg-yellow-100 text-yellow-800 p-4 rounded-xl border border-yellow-300 shadow-sm font-bold text-center">⚠️ Règle d'or : Paiement Comptant à la Livraison exigé. Aucun crédit ne doit être accordé sur le terrain.</div>
+              <h2 className="text-xl font-bold text-[#0D3B48] border-b pb-2">Mes Livraisons du Jour</h2>
+              {(erpData.livraisonsEnCours || []).length === 0 ? (
+                 <div className="text-center p-10 bg-white rounded-xl shadow-sm border border-gray-200"><CheckCircle size={48} className="mx-auto text-green-500 mb-4"/><p className="font-bold text-gray-600">Aucune livraison en attente.</p></div>
+              ) : (
+                 (erpData.livraisonsEnCours || []).map(liv => (
+                    <div key={liv.id} className="bg-white rounded-xl shadow-md border-t-4 border-[#2EC4B6] overflow-hidden">
+                       <div className="p-5">
+                          <div className="flex justify-between items-start mb-2"><h3 className="font-black text-lg text-[#0D3B48]">{liv.client}</h3><span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded uppercase">{liv.status}</span></div>
+                          <p className="text-sm text-gray-600 mb-4 flex items-center gap-2"><MapPin size={14}/> {liv.adresse || "Adresse non spécifiée"}</p>
+                          
+                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
+                             {liv.items ? (
+                                <ul className="text-sm font-bold text-gray-800 space-y-1">
+                                   {liv.items.map((it, i) => <li key={i}>{it.qty}x {it.produit.replace('_', ' ')}</li>)}
+                                </ul>
+                             ) : (
+                                <p className="font-bold text-gray-800">{liv.qty}x {liv.produit?.replace('_', ' ')}</p>
+                             )}
+                             <p className="text-2xl font-black text-green-600 mt-3 border-t pt-2">À Encaisser : {(liv.montant || 0).toLocaleString()} F</p>
+                          </div>
+                          
+                          <button onClick={() => {
+                                updateErpState(data => { 
+                                    const l = data.livraisonsEnCours.find(x => x.id === liv.id); 
+                                    if(l) { 
+                                        data.livraisonsEnCours = data.livraisonsEnCours.filter(x => x.id !== liv.id); 
+                                        data.tresorerie = Math.max(0, (data.tresorerie || 0) + l.montant); 
+                                        
+                                        const descProduits = l.items ? l.items.map(i => `${i.qty}x ${i.produit.replace('_', ' ')}`).join(', ') : `${l.qty}x ${l.produit}`;
+                                        data.transactions.unshift({ id: `FACT-${Date.now()}`, date: new Date().toISOString(), type: 'VENTE', montant: l.montant, desc: `Vente (${descProduits}) (Encaissement Livreur)`, client: l.client, items: l.items }); 
+                                    } 
+                                }, `Encaissement livraison - Client: ${liv.client}`).then(s => s && showToast("Encaissement Validé !"));
+                          }} className="w-full py-2 bg-[#0D3B48] text-white font-bold rounded-xl shadow hover:bg-[#2EC4B6] flex items-center justify-center gap-2"><CheckSquare size={18}/> Confirmer : Livré & Encaissé</button>
+                       </div>
+                    </div>
+                 ))
+              )}
+           </main>
+        </div>
+     );
+  }
+
+  if (userType === 'client' && !showPinModal) {
+     const addB2BItem = () => setB2bForm(prev => ({ ...prev, items: [...prev.items, { produit: 'Sel_50kg', qty: 1 }] }));
+     const removeB2BItem = (index) => setB2bForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
+     const updateB2BItem = (index, field, value) => {
+        setB2bForm(prev => {
+            const newItems = [...prev.items];
+            newItems[index][field] = value;
+            return { ...prev, items: newItems };
+        });
+     };
+
+     return (
+        <div className="min-h-screen bg-gray-50 flex flex-col">
+           <header className="bg-[#0D3B48] text-white p-4 shadow-md flex justify-between items-center"><div className="flex items-center gap-3"><LogoComponent sizeClass="w-10 h-10" /><div><h1 className="font-bold text-xl text-[#C29B38]">Portail Partenaire</h1><p className="text-xs">Connecté: {currentUser.nom}</p></div></div><button onClick={() => { setCurrentUser(null); setUserType('personnel'); setShowPinModal(true); }} className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20"><LogOut size={16}/> Quitter</button></header>
+           <main className="flex-1 p-6 max-w-5xl mx-auto w-full space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-orange-500"><p className="text-sm text-gray-500 font-bold mb-1">Ma Dette Actuelle</p><p className="text-3xl font-black text-orange-600">{(currentUser.dette || 0).toLocaleString()} F</p></div>
+                 <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-[#2EC4B6]"><p className="text-sm text-gray-500 font-bold mb-1">Total de mes achats</p><p className="text-3xl font-black text-[#2EC4B6]">{(currentUser.totalAchats || 0).toLocaleString()} F</p></div>
+              </div>
+              <div className="bg-white rounded-xl shadow-md overflow-hidden">
+                 <div className="bg-[#2EC4B6] text-white p-4 font-bold flex items-center justify-between"><div className="flex items-center gap-2"><ShoppingCart size={18}/> Nouveau Panier de Commande</div><span className="bg-teal-700 px-2 py-1 rounded text-xs">{b2bForm.items.length} produit(s)</span></div>
+                 <form onSubmit={handleClientOrder} className="p-6">
+                    <div className="space-y-3 mb-6">
+                       {b2bForm.items.map((item, idx) => (
+                          <div key={idx} className="flex gap-4 items-end bg-slate-50 p-4 rounded-xl border border-slate-200">
+                             <div className="flex-1">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Produit</label>
+                                <select value={item.produit} onChange={e => updateB2BItem(idx, 'produit', e.target.value)} className="w-full p-2 border rounded font-bold text-[#0D3B48]">
+                                   <option value="Sel_50kg">Sac de 50kg</option><option value="Sel_25kg">Sac de 25kg</option><option value="Sachet_1kg">Sachet 1kg</option><option value="Sachet_500g">Sachet 500g</option><option value="Bloc_Betail">Bloc à lécher</option><option value="Aromatise_Premium">Sel Aromatisé Premium</option>
+                                </select>
+                             </div>
+                             <div className="w-24">
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Quantité</label>
+                                <input type="number" value={item.qty} onChange={e => updateB2BItem(idx, 'qty', Number(e.target.value))} required min="1" className="w-full p-2 border rounded text-center font-bold"/>
+                             </div>
+                             {b2bForm.items.length > 1 && (
+                                <button type="button" onClick={() => removeB2BItem(idx)} className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200"><Trash2 size={20}/></button>
+                             )}
+                          </div>
+                       ))}
+                    </div>
+                    <div className="flex justify-between items-center">
+                       <button type="button" onClick={addB2BItem} className="text-[#2EC4B6] font-bold text-sm flex items-center gap-1 hover:underline"><PlusCircle size={16}/> Ajouter une ligne</button>
+                       <button type="submit" className="h-12 px-8 bg-[#0D3B48] text-white font-bold rounded shadow-md hover:bg-gray-800">Transmettre la Commande</button>
+                    </div>
+                 </form>
+              </div>
+              <div className="bg-white p-6 rounded-xl shadow-sm"><h3 className="font-bold text-gray-800 border-b pb-2 mb-4">Mes Commandes</h3><table className="w-full text-left text-sm"><thead><tr className="bg-gray-100"><th className="p-3">Réf</th><th className="p-3">Date</th><th className="p-3">Détail du Panier</th><th className="p-3 text-right">Statut</th></tr></thead><tbody>{(erpData.commandesB2B || []).filter(c => c.clientId === currentUser.id).map(cmd => (<tr key={cmd.id} className="border-b"><td className="p-3 font-mono">{cmd.id}</td><td className="p-3">{new Date(cmd.date).toLocaleDateString()}</td><td className="p-3 font-bold">{cmd.items ? cmd.items.map(i => `${i.qty}x ${i.produit}`).join(', ') : `${cmd.qty}x ${cmd.produit}`}</td><td className="p-3 text-right"><span className={`px-2 py-1 rounded text-xs font-bold ${cmd.status==='Expédiée'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>{cmd.status}</span></td></tr>))}</tbody></table></div>
+           </main>
+        </div>
+     );
+  }
+
+  if (showPinModal) {
+    return (
+      <div className="min-h-screen bg-[#0D3B48] flex items-center justify-center p-4">
+        <div className="bg-[#F4F1EA] p-8 rounded-xl shadow-2xl w-full max-w-md text-center">
+          <div className="mb-6"><LogoComponent /></div>
+          <h1 className="text-3xl font-bold text-[#0D3B48] mb-2">SEL & VIE 10.0</h1>
+          <p className="text-[#C29B38] font-semibold mb-8">Edition ERP Intégrale (Paniers Multi-produits)</p>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input type="password" maxLength="4" placeholder="Code PIN" className="w-full text-center text-2xl tracking-widest p-4 border-2 border-gray-300 rounded-lg focus:border-[#2EC4B6] outline-none" value={pinInput} onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))} />
+            <button type="submit" className="w-full bg-[#2EC4B6] text-white font-bold py-4 rounded-lg shadow-md flex justify-center items-center gap-2 hover:bg-[#25A196]"><Lock size={20} /> Se Connecter</button>
+          </form>
+          <div className="text-xs text-gray-500 mt-6 space-y-1">
+             <p>Admin: <strong>1234</strong> | Chef Opérateur: <strong>0000</strong> | Commercial: <strong>1111</strong></p>
+             <p>Livreur: <strong>2222</strong> | Client B2B: <strong>9999</strong> | Public QR: <strong>0001</strong></p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F4F1EA] text-gray-800 font-sans flex flex-col md:flex-row print:bg-white print:m-0">
+      {toast && <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-xl text-white font-semibold transition-all duration-300 ${toast.type === 'error' ? 'bg-red-500' : 'bg-[#2EC4B6]'}`}>{toast.msg}</div>}
+      
+      <div className="fixed bottom-4 right-4 z-[999] space-y-2 pointer-events-none">
+         {smsQueue.map(sms => (
+            <div key={sms.id} className="bg-white border-l-4 border-[#2EC4B6] p-4 rounded-xl shadow-2xl flex gap-3 max-w-sm animate-[slideIn_0.3s_ease-out]">
+               <div className="bg-teal-100 p-2 rounded-full h-fit"><MessageSquare size={20} className="text-[#0D3B48]"/></div>
+               <div><p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Passerelle SMS API - À: {sms.destinataire}</p><p className="text-sm font-semibold text-gray-800">{sms.message}</p></div>
+            </div>
+         ))}
+      </div>
+
+      {printDocument && (
+        <div className="fixed inset-0 z-[9999] bg-gray-900/90 flex flex-col items-center justify-start overflow-y-auto p-4 md:p-10 backdrop-blur-sm">
+           <div className="w-full max-w-3xl flex justify-between items-center bg-gray-800 p-4 rounded-t-2xl shadow-xl border-b border-gray-700">
+              <h3 className="text-white font-bold text-lg flex items-center gap-2"><FileText/> Visionneuse de Document</h3>
+              <div className="flex gap-2">
+                 <button onClick={() => window.print()} className="bg-[#2EC4B6] text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-teal-400 transition-colors"><Printer size={16}/> Imprimer</button>
+                 <button onClick={telechargerPDF} className="bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-indigo-400 transition-colors"><Download size={16}/> Exporter PDF</button>
+                 <button onClick={() => setPrintDocument(null)} className="bg-red-500 text-white p-2 rounded-lg hover:bg-red-400 transition-colors"><X size={20}/></button>
+              </div>
+           </div>
+           
+           <div id="print-area" className="w-full max-w-3xl bg-white min-h-[297mm] p-10 md:p-16 shadow-2xl rounded-b-2xl mb-10 text-black">
+              <div className="border-b-4 border-[#0D3B48] pb-6 mb-8 flex justify-between items-end">
+                <div><h1 className="text-4xl font-black text-[#0D3B48]">SEL & VIE</h1><p className="text-gray-500">Rufisque, Sénégal</p></div>
+                <div className="text-right"><h2 className="text-2xl font-bold text-[#C29B38] uppercase">{printDocument.type === 'paie' ? "FICHE DE PAIE" : (printDocument.type === 'export' ? "EXPORTATION CEDEAO" : printDocument.type)}</h2><p className="font-mono text-gray-600">{printDocument.data.id}</p><p className="text-sm text-gray-400">{printDocument.date}</p></div>
+              </div>
+              <div className="mb-12">
+                {printDocument.type === 'qr_label' && (<div className="text-center space-y-6"><h2 className="text-3xl font-black">SCANNEZ-MOI !</h2><p className="text-xl">Lot N° {printDocument.data.id}</p><div className="border-4 border-black p-4 inline-block mx-auto"><QrCode size={200} className="text-black" /></div></div>)}
+                {printDocument.type === 'po' && (<div className="text-lg space-y-4"><p>Fournisseur: <strong className="text-xl font-bold">{printDocument.data.fournisseur}</strong></p><div className="mt-8 p-4 border border-black bg-gray-50"><p className="font-bold">Demande : {printDocument.data.qty}x {printDocument.data.produit}</p></div></div>)}
+                
+                {(printDocument.type === 'facture' || printDocument.type === 'export') && (
+                   <div className="text-lg space-y-4">
+                      <p>Client : <strong className="text-xl">{printDocument.data.client}</strong></p>
+                      <div className="mt-6 border border-gray-300 rounded-lg overflow-hidden">
+                         <table className="w-full text-left text-sm">
+                            <thead className="bg-gray-100"><tr className="border-b"><th className="p-3">Quantité</th><th className="p-3">Désignation Produit</th></tr></thead>
+                            <tbody>
+                               {printDocument.data.items ? (
+                                  printDocument.data.items.map((it, idx) => <tr key={idx} className="border-b"><td className="p-3 font-bold">{it.qty}</td><td className="p-3">{it.produit.replace('_',' ')}</td></tr>)
+                               ) : (
+                                  <tr><td className="p-3 font-bold">{printDocument.data.qty}</td><td className="p-3">{printDocument.data.produit}</td></tr>
+                               )}
+                            </tbody>
+                         </table>
+                      </div>
+                      <p className="text-2xl font-bold mt-6 text-right">Total: {(printDocument.data.montant || 0).toLocaleString()} FCFA</p>
+                   </div>
+                )}
+                
+                {printDocument.type === 'paie' && (<div className="text-lg space-y-4"><p>Employé: <strong className="text-xl">{printDocument.data.nom}</strong> ({printDocument.data.role})</p><div className="border-t border-black pt-4"><p className="font-bold">Base de calcul : {(printDocument.data.base || 0).toLocaleString()} F</p><p className="text-green-600">Primes Acquises: +{(printDocument.data.primes || 0).toLocaleString()} F</p><p className="text-red-600">Avances Dues: -{(printDocument.data.avances || 0).toLocaleString()} F</p></div><p className="text-2xl font-black mt-4 border-t-4 border-double border-gray-300 pt-2">NET À PAYER: {(printDocument.data.net || 0).toLocaleString()} FCFA</p></div>)}
+                {printDocument.type === 'coa' && (<div className="space-y-6 text-lg"><p className="font-bold text-xl border-b pb-2">Certificat de Qualité Interne (Standard FRA)</p><div className="grid grid-cols-2 gap-4"><div><p className="text-gray-500">ID du Lot:</p><p className="font-mono font-bold">{printDocument.data.id}</p></div></div><div className="mt-8 bg-gray-50 p-6 border border-gray-300"><p className="flex justify-between border-b py-2"><span>Teneur en Iode (KIO3) :</span> <strong>{printDocument.data.labo?.iode || 'N/A'} ppm</strong></p><p className="flex justify-between border-b py-2"><span>Taux d'Humidité :</span> <strong>{printDocument.data.labo?.humidite || 'N/A'} %</strong></p></div></div>)}
+              </div>
+              <div className="mt-20 flex justify-end"><div className="border-2 border-[#0D3B48] p-6 rounded-lg rotate-[-2deg] inline-block text-center shadow-sm"><p className="text-xs font-bold text-[#0D3B48] uppercase border-b border-[#0D3B48] pb-1 mb-2 tracking-widest">Cachet Électronique</p><div className="flex items-center justify-center gap-2 text-[#2EC4B6]"><Stamp size={32} /><p className="font-serif text-2xl font-bold">Approuvé</p></div><p className="text-xs text-gray-500 mt-2">Par {printDocument.cachet}</p></div></div>
+           </div>
+        </div>
+      )}
+
+      <aside className="w-full md:w-64 bg-[#0D3B48] text-white print:hidden flex flex-col shrink-0">
+        <div className="p-6 border-b border-gray-700 flex items-center gap-3"><LogoComponent sizeClass="w-12 h-12" /><div><h2 className="font-bold text-xl text-[#C29B38]">SEL & VIE</h2><p className="text-[10px] text-gray-400">Édition V10 Finale</p></div></div>
+        <nav className="flex-1 overflow-y-auto py-2 space-y-1 px-3">
+          {[
+            { id: 'dashboard', icon: BarChart2, label: 'Tableau de Bord', roles: ['admin', 'commercial', 'operateur'] },
+            { id: 'sauniers', icon: HandCoins, label: 'Achat Multi-Fournisseurs', roles: ['admin', 'operateur'] },
+            { id: 'amont', icon: Anchor, label: 'Tri & Lavage', roles: ['admin', 'operateur'] }, 
+            { id: 'production', icon: Factory, label: 'Production & Labo', roles: ['admin', 'operateur'] },
+            { id: 'conditionnement', icon: Package, label: 'Conditionnement', roles: ['admin', 'operateur'] }, 
+            { id: 'maintenance', icon: Wrench, label: 'GMAO (Machines)', roles: ['admin', 'operateur'] },
+            { id: 'b2b', icon: ShoppingCart, label: 'Ventes & Livraisons', roles: ['admin', 'commercial'] },
+            { id: 'frais', icon: Receipt, label: 'Frais Généraux & PO', roles: ['admin'] },
+            { id: 'crm', icon: Briefcase, label: 'CRM & Dettes B2B', roles: ['admin', 'commercial'] },
+            { id: 'analytique', icon: Calculator, label: 'Compta. Analytique', roles: ['admin'] }, 
+            { id: 'registre', icon: Database, label: 'Registre Opérations', roles: ['admin'] }, 
+            { id: 'audit', icon: Activity, label: 'Journal d\'Audit', roles: ['admin'] }, 
+            { id: 'legal', icon: ShieldCheck, label: 'Conformité Légale', roles: ['admin'] },
+            { id: 'rh', icon: Users, label: 'Ressources Humaines', roles: ['admin'] },
+            { id: 'admin_edit', icon: Settings, label: '⚙️ Paramètres Admin', roles: ['admin'] } 
+          ].filter(item => canSee(item.roles)).map(item => (
+            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all font-medium text-left text-sm ${activeTab === item.id ? 'bg-[#2EC4B6] text-white shadow-md' : 'text-gray-300 hover:bg-white/10'}`}>
+              <item.icon size={18} className={activeTab === item.id ? 'text-white' : (item.id==='admin_edit'?'text-rose-400':'text-[#C29B38]')} /> {item.label}
+            </button>
+          ))}
+        </nav>
+        <div className="p-4 border-t border-gray-700">
+          <button onClick={() => { setCurrentUser(null); setShowPinModal(true); }} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded text-sm text-gray-300">
+            <LogOut size={16} /> Quitter ({currentUser?.nom?.split(' ')[0]})
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full print:p-0 print:m-0">
+        
+        {canSee(['admin', 'operateur']) && (
+           <div className={`mb-6 p-4 rounded-xl shadow-sm flex items-center justify-between border ${iotEnv.isAlert ? 'bg-red-50 border-red-200 text-red-800' : 'bg-white border-gray-200 text-[#0D3B48]'}`}>
+              <div className="flex items-center gap-4">
+                 <Cpu className={`w-8 h-8 ${iotEnv.isAlert ? 'text-red-500 animate-pulse' : 'text-blue-500'}`} />
+                 <div><h3 className="font-bold text-sm">Capteurs Usine (IoT Live)</h3><p className="text-xs text-gray-500">Mise à jour toutes les 3s</p></div>
+              </div>
+              <div className="flex items-center gap-6">
+                 <div className="text-center"><p className="text-xs text-gray-500 font-bold uppercase">Température</p><p className="font-black text-xl">{iotEnv.temp.toFixed(1)}°C</p></div>
+                 <div className="text-center"><p className="text-xs text-gray-500 font-bold uppercase">Humidité</p><p className={`font-black text-xl ${iotEnv.isAlert ? 'text-red-600' : 'text-blue-600'}`}>{iotEnv.hum.toFixed(1)}%</p></div>
+              </div>
+           </div>
+        )}
+
+        {docsCritiques.length > 0 && canSee(['admin']) && activeTab !== 'legal' && (
+           <div className="mb-6 bg-red-600 text-white p-4 rounded-xl shadow-lg flex items-center justify-between animate-pulse">
+              <div className="flex items-center gap-3"><ShieldAlert className="w-8 h-8" /><div><h3 className="font-bold">Alerte Conformité Légale !</h3><p className="text-sm">Vous avez {docsCritiques.length} document(s) expirant dans moins de 30 jours (Ex: {docsCritiques[0].nom}).</p></div></div>
+              <button onClick={()=>setActiveTab('legal')} className="bg-white text-red-600 px-4 py-2 rounded-lg font-bold text-sm shadow hover:bg-red-50">Gérer maintenant</button>
+           </div>
+        )}
+
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+             {}
+             {(() => {
+                const topEmployee = [...(erpData.personnel || [])].sort((a, b) => (b.reussites || 0) - (a.reussites || 0))[0];
+                if (!topEmployee || topEmployee.reussites === 0) return null;
+                return (
+                   <div className="bg-gradient-to-r from-[#C29B38] to-yellow-600 rounded-2xl p-6 shadow-lg text-white flex items-center justify-between overflow-hidden relative">
+                      <div className="absolute right-[-10%] top-[-20%] opacity-20"><Award size={150} /></div>
+                      <div className="flex items-center gap-5 z-10">
+                         <div className="bg-white p-4 rounded-full shadow-md text-[#C29B38] animate-bounce">
+                            <Award size={40} />
+                         </div>
+                         <div>
+                            <h3 className="text-sm font-black uppercase tracking-widest text-yellow-100 mb-1">🏅 Employé du Mois</h3>
+                            <p className="text-3xl font-black">{topEmployee.nom}</p>
+                         </div>
+                      </div>
+                      <div className="z-10 text-right">
+                         <p className="text-4xl font-black">{topEmployee.reussites}</p>
+                         <p className="text-sm font-bold text-yellow-100 uppercase">Opérations réussies</p>
+                      </div>
+                   </div>
+                );
+             })()}
+
+             <div className="bg-gradient-to-r from-[#0D3B48] to-[#114B5C] rounded-2xl p-8 shadow-lg text-white relative overflow-hidden">
+               <div className="absolute right-0 top-0 opacity-10"><Target size={200} className="-mr-10 -mt-10" /></div>
+               <h3 className="text-xl font-black mb-2 flex items-center gap-2"><Target className="text-[#C29B38]"/> Objectif Annuel (Business Plan) : 32 Cycles / 86,4 Tonnes</h3>
+               <p className="text-sm text-blue-100 mb-6 max-w-2xl">L'objectif vital de l'entreprise est de vendre 86,4 tonnes de sel fin iodé sur l'année pour garantir la rentabilité prévue.</p>
+               <div className="bg-white/10 p-4 rounded-xl border border-white/20">
+                  <div className="flex justify-between text-sm font-bold mb-2"><span className="text-white">Tonnage Global Vendu</span><span className="text-[#2EC4B6] text-lg">{(tonnageVendu||0).toLocaleString()} kg / {objTonnage.toLocaleString()} kg</span></div>
+                  <div className="w-full bg-black/30 rounded-full h-6 border border-white/10">
+                     <div className="h-6 rounded-full bg-gradient-to-r from-[#2EC4B6] to-[#C29B38] transition-all duration-1000 flex items-center justify-end pr-2 shadow-[0_0_15px_rgba(46,196,182,0.5)]" style={{width: `${Math.max(5, pctTonnage)}%`}}><span className="text-[10px] font-black text-[#0D3B48]">{pctTonnage.toFixed(1)}%</span></div>
+                  </div>
+               </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><p className="text-gray-500 text-sm font-semibold mb-1">Trésorerie Globale</p><p className="text-3xl font-black text-[#0D3B48]">{(erpData.tresorerie || 0).toLocaleString()} F</p></div>
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100"><p className="text-gray-500 text-sm font-semibold mb-1">Dettes Clients B2B</p><p className="text-3xl font-black text-orange-500">{(erpData.clients || []).reduce((acc, c) => acc + (c.dette||0), 0).toLocaleString()} F</p></div>
+              <div className="bg-[#0D3B48] p-6 rounded-xl shadow-sm text-white"><p className="text-[#C29B38] text-sm font-semibold mb-1">Livraisons en attente</p><p className="text-3xl font-black text-white">{(erpData.livraisonsEnCours || []).length}</p></div>
+            </div>
+
+            <div className="mt-8 space-y-6">
+                <h3 className="text-xl font-bold text-[#0D3B48] flex items-center gap-2 border-b pb-2">
+                    <Box className="text-[#2EC4B6]" /> Inventaire Global & État des Stocks
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="bg-slate-700 text-white p-3 font-bold flex items-center gap-2">
+                            <Factory size={16}/> Matières Premières (Vrac)
+                        </div>
+                        <div className="p-4 space-y-3 text-sm">
+                            <div className="flex justify-between border-b pb-1"><span>Sel Brut (Fatick)</span><span className="font-bold">{erpData.stocks.fatickBrut?.toLocaleString()} kg</span></div>
+                            <div className="flex justify-between border-b pb-1"><span>Sel Brut (Usine)</span><span className="font-bold">{erpData.stocks.usineBrut?.toLocaleString()} kg</span></div>
+                            <div className="flex justify-between border-b pb-1"><span>Sel Trié (Propre)</span><span className="font-bold">{erpData.stocks.selTrie?.toLocaleString()} kg</span></div>
+                            <div className="flex justify-between border-b pb-1"><span>Sel Purifié (Lavé)</span><span className="font-bold">{erpData.stocks.selLave?.toLocaleString()} kg</span></div>
+                            <div className="flex justify-between border-b pb-1"><span>Freinte (Déchets)</span><span className="font-bold text-orange-600">{erpData.stocks.freinte?.toLocaleString()} kg</span></div>
+                            <div className="flex justify-between border-b pb-1"><span>Iodate (KIO3)</span><span className="font-bold text-purple-600">{erpData.stocks.kio3?.toLocaleString()} kg</span></div>
+                            <div className="flex justify-between"><span>Intrants (Épices)</span><span className="font-bold text-green-600">{erpData.stocks.intrantsAromes?.toLocaleString()} kg</span></div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="bg-amber-600 text-white p-3 font-bold flex items-center gap-2">
+                            <Package size={16}/> Emballages Vides
+                        </div>
+                        <div className="p-4 space-y-3 text-sm">
+                            {Object.entries(erpData.emballages || {}).map(([key, val]) => (
+                                <div key={key} className="flex justify-between border-b pb-1 items-center">
+                                    <span className="capitalize">{key.replace('sac', 'Sac ').replace('sachet', 'Sachet ')}</span>
+                                    <span className={`font-bold px-2 py-0.5 rounded ${val < 500 ? 'bg-red-100 text-red-700' : 'text-gray-800'}`}>
+                                        {val.toLocaleString()} u.
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="bg-[#2EC4B6] text-white p-3 font-bold flex items-center gap-2">
+                            <ShoppingCart size={16}/> Produits Finis (Usine)
+                        </div>
+                        <div className="p-4 space-y-3 text-sm">
+                            {Object.entries(erpData.produitsFinis || {}).map(([key, val]) => (
+                                <div key={key} className="flex justify-between border-b pb-1 items-center">
+                                    <span>{key.replace('_', ' ')}</span>
+                                    <span className="font-bold text-[#0D3B48]">{val.toLocaleString()}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="bg-blue-600 text-white p-3 font-bold flex items-center gap-2">
+                            <MapPin size={16}/> Dépôts Externes
+                        </div>
+                        <div className="p-4 space-y-4 text-sm">
+                            {(erpData.depots || []).map(depot => (
+                                <div key={depot.id} className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                    <p className="font-bold text-blue-900 mb-2">{depot.nom}</p>
+                                    <div className="space-y-1">
+                                        {Object.entries(depot.stocks || {}).map(([prod, qt]) => (
+                                            <div key={prod} className="flex justify-between text-xs">
+                                                <span className="text-gray-600">{prod.replace('_', ' ')}</span>
+                                                <span className="font-bold">{qt}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'admin_edit' && (
+           <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-rose-600 flex items-center gap-2"><Settings/> Paramètres Globaux (God Mode)</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-[#0D3B48] mb-4 border-b pb-2 flex items-center gap-2"><ToggleLeft size={18}/> Politique de Crédit</h3>
+                    <label className="flex flex-col gap-2 cursor-pointer">
+                        <div className="flex items-center gap-3">
+                           <input type="checkbox" checked={erpData.config?.forcePaiementComptant} onChange={(e) => updateErpState(d => { if(!d.config) d.config = {}; d.config.forcePaiementComptant = e.target.checked; })} className="w-5 h-5 accent-[#2EC4B6]" />
+                           <span className="font-bold text-gray-700">Paiement 100% Comptant</span>
+                        </div>
+                        <p className="text-xs text-gray-500 ml-8">Si actif, bloque les paiements partiels et les ventes à crédit dans toute l'application.</p>
+                    </label>
+                 </div>
+                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-[#0D3B48] mb-4 border-b pb-2 flex items-center gap-2"><DollarSign size={18}/> Ajustement Trésorerie</h3>
+                    <form onSubmit={(e) => submitAdminGlobalEdit(e, 'treasury')} className="flex gap-4">
+                       <input type="number" name="tresorerie" defaultValue={erpData.tresorerie || 0} className="w-full p-3 border rounded bg-slate-50 font-black text-xl" />
+                       <button type="submit" className="bg-[#0D3B48] text-white px-6 rounded font-bold hover:bg-rose-600">Écraser</button>
+                    </form>
+                 </div>
+                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-[#0D3B48] mb-4 border-b pb-2 flex items-center gap-2"><Factory size={18}/> Corrections Stocks (Matières Premières)</h3>
+                    <form onSubmit={(e) => submitAdminGlobalEdit(e, 'stocks')} className="space-y-3">
+                       <div className="grid grid-cols-2 gap-3">
+                          <div><label className="text-xs font-bold text-gray-500">Brut Fatick</label><input type="number" name="fatickBrut" defaultValue={erpData.stocks?.fatickBrut||0} className="w-full p-2 border rounded"/></div>
+                          <div><label className="text-xs font-bold text-gray-500">Brut Usine</label><input type="number" name="usineBrut" defaultValue={erpData.stocks?.usineBrut||0} className="w-full p-2 border rounded"/></div>
+                          <div><label className="text-xs font-bold text-gray-500">Sel Trié</label><input type="number" name="selTrie" defaultValue={erpData.stocks?.selTrie||0} className="w-full p-2 border rounded"/></div>
+                          <div><label className="text-xs font-bold text-gray-500">Freinte</label><input type="number" name="freinte" defaultValue={erpData.stocks?.freinte||0} className="w-full p-2 border rounded"/></div>
+                          <div><label className="text-xs font-bold text-gray-500">Sel Purifié (Lavé)</label><input type="number" name="selLave" defaultValue={erpData.stocks?.selLave||0} className="w-full p-2 border rounded"/></div>
+                          <div><label className="text-xs font-bold text-gray-500">Épices & Intrants</label><input type="number" name="intrantsAromes" defaultValue={erpData.stocks?.intrantsAromes||0} className="w-full p-2 border rounded"/></div>
+                       </div>
+                       <button type="submit" className="w-full bg-[#0D3B48] text-white p-2 rounded font-bold hover:bg-rose-600">Mettre à jour les stocks</button>
+                    </form>
+                 </div>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'sauniers' && (
+           <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                 <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-2"><HandCoins className="text-[#2EC4B6]"/> Achats Multi-Fournisseurs</h2>
+                 <button onClick={()=>setActionModal({ type: 'edit_saunier', obj: { nom: '', telephone: '', score: 50, avance: 0, dette: 0 } })} className="bg-[#2EC4B6] text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-[#0D3B48]"><PlusCircle size={16}/> Nouveau Fournisseur</button>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 overflow-y-auto max-h-[70vh]">
+                    <h3 className="font-bold border-b pb-2 mb-4 flex justify-between items-center"><span>Portail Fournisseurs</span></h3>
+                    <div className="space-y-4">
+                       {(erpData.sauniers || []).map(s => (
+                          <div key={s.id} className="p-4 border rounded bg-gray-50 relative">
+                             <div className="absolute top-2 right-2 text-xs font-bold text-green-700 bg-green-100 px-2 py-1 rounded">Score: {s.score || 0}/100</div>
+                             <h4 className="font-bold text-[#0D3B48] flex items-center gap-2">{s.nom} <button onClick={()=>setActionModal({type: 'edit_saunier', obj: s})} className="text-gray-400 hover:text-[#2EC4B6]"><Edit size={14}/></button></h4>
+                             <p className="text-sm text-gray-500 mb-2">{s.livraisons || 0} livraisons | <PhoneCall size={12} className="inline"/> {s.telephone || 'Non renseigné'}</p>
+                             <div className="flex justify-between items-center mt-2 border-t pt-2">
+                                <div>
+                                   <p className="text-sm font-bold text-orange-600">Avance : {(s.avance || 0).toLocaleString()} F</p>
+                                   <p className="text-sm font-bold text-red-600">Dette due : {(s.dette || 0).toLocaleString()} F</p>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                   <button onClick={()=>setActionModal({ type: 'avance_saunier', obj: s })} className="bg-orange-100 text-orange-700 text-xs px-3 py-1 rounded hover:bg-orange-200 font-bold">+ Donner Avance</button>
+                                   {(s.dette || 0) > 0 && <button onClick={()=>setActionModal({ type: 'payer_dette', obj: s })} className="bg-red-100 text-red-700 text-xs px-3 py-1 rounded hover:bg-red-200 font-bold">Rembourser Dette</button>}
+                                </div>
+                             </div>
+                          </div>
+                       ))}
+                    </div>
+                 </div>
+
+                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-fit">
+                    <div className="bg-[#0D3B48] text-white p-4 font-bold flex items-center justify-between"><span className="flex items-center gap-2"><Truck size={18}/> Nouveau Bon de Réception (Achat)</span><button type="button" onClick={() => showToast("En attente de SMS USSD...", "success")} className="bg-blue-600 px-3 py-1 rounded flex items-center gap-1 text-xs hover:bg-blue-500"><Smartphone size={14}/> Auto USSD</button></div>
+                    <form onSubmit={handleAchatSaunier} className="p-6">
+                       <div className="mb-4">
+                          <label className="block text-sm font-bold mb-1 text-gray-700">Sélectionner Fournisseur</label>
+                          <select value={achatForm.saunier} onChange={e=>setAchatForm({...achatForm, saunier: e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50 font-bold text-[#0D3B48]">
+                             <option value="">-- Choisir un fournisseur --</option>
+                             {(erpData.sauniers || []).map(s => <option key={s.id} value={s.id}>{s.nom} (Avance: {s.avance || 0} F | Dette: {s.dette || 0} F)</option>)}
+                          </select>
+                       </div>
+
+                       <div className="space-y-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                          {achatForm.items.map((item, idx) => (
+                             <div key={idx} className="flex gap-2 items-center">
+                                <div className="flex-1">
+                                   <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Catégorie</label>
+                                   <select value={item.cible} onChange={e => {
+                                      const newItems = [...achatForm.items]; newItems[idx].cible = e.target.value; setAchatForm({...achatForm, items: newItems});
+                                   }} className="w-full p-2 border rounded font-bold text-[#0D3B48]">
+                                      {ACHAT_CATALOG.map(cat => <option key={cat.id} value={cat.id}>{cat.nom}</option>)}
+                                   </select>
+                                </div>
+                                <div className="w-20">
+                                   <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Qté</label>
+                                   <input type="number" value={item.qty} onChange={e => {
+                                      const newItems = [...achatForm.items]; newItems[idx].qty = Number(e.target.value); setAchatForm({...achatForm, items: newItems});
+                                   }} required min="1" className="w-full p-2 border rounded text-center font-bold"/>
+                                </div>
+                                <div className="w-24">
+                                   <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">P.U (F)</label>
+                                   <input type="number" value={item.prix} onChange={e => {
+                                      const newItems = [...achatForm.items]; newItems[idx].prix = Number(e.target.value); setAchatForm({...achatForm, items: newItems});
+                                   }} required min="0" step="any" className="w-full p-2 border rounded text-center font-bold"/>
+                                </div>
+                                {achatForm.items.length > 1 && (
+                                   <button type="button" onClick={() => {
+                                      const newItems = achatForm.items.filter((_, i) => i !== idx); setAchatForm({...achatForm, items: newItems});
+                                   }} className="p-2 mt-4 text-red-500 hover:text-red-700 bg-red-50 rounded"><Trash2 size={16}/></button>
+                                )}
+                             </div>
+                          ))}
+                          <button type="button" onClick={() => setAchatForm({...achatForm, items: [...achatForm.items, { cible: 'fatickBrut', qty: 1, prix: 0 }]})} className="text-[#2EC4B6] font-bold text-sm flex items-center gap-1 hover:underline mt-2"><PlusCircle size={14}/> Ajouter un produit</button>
+                       </div>
+
+                       <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 flex justify-between items-center mb-4">
+                          <span className="text-sm font-bold text-amber-900">Total Facture :</span>
+                          <span className="text-2xl font-black text-amber-700">{calcTotalAchat().toLocaleString()} F</span>
+                       </div>
+
+                       <div className="grid grid-cols-2 gap-4">
+                          <div>
+                             <label className="block text-sm font-bold text-gray-700 mb-1">Montant Payé (Immédiat)</label>
+                             <input type="number" value={achatForm.montantPaye} onChange={e=>setAchatForm({...achatForm, montantPaye: Number(e.target.value)})} className="w-full p-3 border rounded-xl font-bold bg-white" placeholder="0" min="0" />
+                          </div>
+                          <div>
+                             <label className="block text-sm font-bold text-gray-700 mb-1">Avance Utilisée</label>
+                             <input type="number" value={achatForm.avanceUtilisee} onChange={e=>setAchatForm({...achatForm, avanceUtilisee: Number(e.target.value)})} className="w-full p-3 border rounded-xl font-bold bg-white" placeholder="0" max={(erpData.sauniers?.find(s => s.id === achatForm.saunier)?.avance) || 0} min="0" />
+                          </div>
+                       </div>
+                       
+                       <div className="mt-4">
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Intervenant(s) (Réception & Déchargement)</label>
+                          <input type="text" value={achatForm.operateurs} onChange={e=>setAchatForm({...achatForm, operateurs: e.target.value})} placeholder="Ex: Moussa, Modou..." className="w-full p-3 border border-gray-300 rounded-xl bg-white text-gray-800" />
+                       </div>
+
+                       <div className="flex gap-2 p-2 bg-gray-50 rounded border mt-2">
+                          <label className={`flex-1 text-center py-2 rounded font-bold text-sm cursor-pointer ${paymentMethod==='cash' ? 'bg-[#0D3B48] text-white shadow' : 'text-gray-500 hover:bg-gray-200'}`}><input type="radio" name="pay_achat" className="hidden" checked={paymentMethod==='cash'} onChange={()=>setPaymentMethod('cash')}/> Caisse</label>
+                          <label className={`flex-1 text-center py-2 rounded font-bold text-sm cursor-pointer flex justify-center items-center gap-1 ${paymentMethod==='wave' ? 'bg-blue-500 text-white shadow' : 'text-gray-500 hover:bg-gray-200'}`}><input type="radio" name="pay_achat" className="hidden" checked={paymentMethod==='wave'} onChange={()=>setPaymentMethod('wave')}/><Smartphone size={14}/> Wave</label>
+                       </div>
+
+                       {(() => {
+                          const reste = calcTotalAchat() - (Number(achatForm.montantPaye)||0) - (Number(achatForm.avanceUtilisee)||0);
+                          if (reste !== 0) {
+                             return (
+                                <div className={`p-3 rounded-lg text-sm font-bold text-center mt-3 ${reste > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                   {reste > 0 ? `Dette envers Fournisseur : +${reste.toLocaleString()} F` : `Trop perçu (Ajouté aux Avances) : ${Math.abs(reste).toLocaleString()} F`}
+                                </div>
+                             )
+                          }
+                          return null;
+                       })()}
+
+                       <button type="submit" className="w-full bg-[#0D3B48] hover:bg-gray-800 text-white font-bold py-4 rounded-xl shadow-md transition-colors text-lg mt-4">Valider la Réception & Facture</button>
+                    </form>
+                 </div>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'amont' && (
+           <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-2"><Anchor className="text-[#2EC4B6]"/> Traitement Amont (Tri & Lavage)</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl shadow-sm border border-orange-200 overflow-hidden">
+                    <div className="bg-amber-600 text-white p-4 font-bold flex items-center justify-between">
+                       <span className="flex items-center gap-2"><Filter size={18}/> Étape 1 : Tri & Nettoyage (Criblage)</span>
+                       <span className="text-xs bg-white/20 px-2 py-1 rounded">Brut dispo: {erpData.stocks.usineBrut || 0} kg</span>
+                    </div>
+                    <form onSubmit={handleTriNettoyage} className="p-6 space-y-4">
+                       <p className="text-sm text-gray-600 mb-2">Séparation mécanique et manuelle du sable, cailloux et autres impuretés.</p>
+                       <div className="space-y-4">
+                          <div>
+                             <label className="block text-sm font-bold text-gray-700 mb-1">Sel Brut à Trier (kg)</label>
+                             <input type="number" value={triForm.brut} onChange={e=>setTriForm({...triForm, brut: Number(e.target.value)})} max={erpData.stocks.usineBrut || 0} required min="1" className="w-full p-3 border-2 rounded-xl text-lg font-bold bg-white" />
+                          </div>
+                          <div>
+                             <label className="block text-sm font-bold text-amber-700 mb-1">Sel Propre (Trié) Obtenu (kg)</label>
+                             <input type="number" value={triForm.trie} onChange={e=>setTriForm({...triForm, trie: Number(e.target.value)})} required min="1" max={triForm.brut || 0} className="w-full p-3 border-2 border-amber-200 rounded-xl text-lg font-bold bg-amber-100 text-amber-900" />
+                          </div>
+                       </div>
+                       <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Opérateur(s) de Tri</label>
+                          <input type="text" value={triForm.operateurs} onChange={e=>setTriForm({...triForm, operateurs: e.target.value})} placeholder="Ex: Awa, Equipe A..." required className="w-full p-3 border border-gray-300 rounded-xl bg-white" />
+                       </div>
+                       <button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl shadow-md">Valider le Tri & Évacuer Impuretés</button>
+                    </form>
+                 </div>
+
+                 <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl shadow-sm border border-cyan-200 overflow-hidden">
+                    <div className="bg-cyan-600 text-white p-4 font-bold flex items-center justify-between">
+                       <span className="flex items-center gap-2"><Droplets size={18}/> Étape 2 : Lavage à la Saumure</span>
+                       <span className="text-xs bg-white/20 px-2 py-1 rounded">Sel Trié dispo: {erpData.stocks.selTrie || 0} kg</span>
+                    </div>
+                    <form onSubmit={handleLavageSaumure} className="p-6 space-y-4">
+                       <p className="text-sm text-gray-600 mb-2">Purification du sel trié par lavage intensif à la saumure pour éliminer les fines.</p>
+                       <div className="space-y-4">
+                          <div>
+                             <label className="block text-sm font-bold text-gray-700 mb-1">Sel Trié à Laver (kg)</label>
+                             <input type="number" value={lavageForm.brut} onChange={e=>setLavageForm({...lavageForm, brut: Number(e.target.value)})} max={erpData.stocks.selTrie || 0} required min="1" className="w-full p-3 border-2 rounded-xl text-lg font-bold bg-white" />
+                          </div>
+                          <div>
+                             <label className="block text-sm font-bold text-cyan-700 mb-1">Sel Purifié (Lavé) Obtenu (kg)</label>
+                             <input type="number" value={lavageForm.seche} onChange={e=>setLavageForm({...lavageForm, seche: Number(e.target.value)})} required min="1" max={lavageForm.brut || 0} className="w-full p-3 border-2 border-cyan-200 rounded-xl text-lg font-bold bg-cyan-100 text-cyan-900" />
+                          </div>
+                       </div>
+                       <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Opérateur(s) de Lavage</label>
+                          <input type="text" value={lavageForm.operateurs} onChange={e=>setLavageForm({...lavageForm, operateurs: e.target.value})} placeholder="Ex: Ousmane..." required className="w-full p-3 border border-gray-300 rounded-xl bg-white" />
+                       </div>
+                       <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-xl shadow-md">Démarrer le Cycle de Lavage</button>
+                    </form>
+                 </div>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'production' && (
+          <div className="space-y-8">
+            <div className="flex justify-between items-center bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+               <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-3"><Factory className="text-[#2EC4B6]"/> Hub Central : Production & Laboratoire</h2>
+               <div className="flex gap-2">
+                  <span className="bg-purple-100 text-purple-800 text-sm font-bold px-4 py-2 rounded-lg border border-purple-200 flex items-center gap-2"><Beaker size={16}/> {(erpData.lots || []).filter(l=>l.status === 'Attente Labo').length} Lot(s) en attente Labo</span>
+               </div>
+            </div>
+            
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                    <h3 className="text-lg font-black text-slate-700 flex items-center gap-2 border-b-2 border-slate-200 pb-2"><Factory size={20} className="text-slate-500"/> Ateliers de Production</h3>
+                    
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="bg-[#0D3B48] text-white p-4 font-bold flex items-center justify-between"><div className="flex items-center gap-2"><CheckCircle size={18}/> Broyage (Moulin INOX) & Iodation (RTK)</div> <span className="text-sm bg-white/20 px-3 py-1 rounded">Sel Lavé dispo: <strong>{erpData.stocks.selLave||0} kg</strong></span></div>
+                        <ProductionIodationForm stockLave={erpData.stocks.selLave || 0} onSubmit={handleIodationMBI} />
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-orange-100 overflow-hidden">
+                        <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 font-bold flex items-center justify-between"><div className="flex items-center gap-2"><Leaf size={18}/> Phase 2 : Sels Aromatisés</div> <span className="text-sm bg-white/20 px-2 py-1 rounded">Stock Intrants: <strong>{erpData.stocks.intrantsAromes||0} kg</strong></span></div>
+                        <form onSubmit={handleProdAromatise} className="p-6 space-y-4">
+                            <p className="text-sm text-gray-500 mb-4">Mélange de sel purifié avec des herbes locales ou épices pour créer la gamme Premium.</p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="block text-sm font-bold text-gray-700 mb-1">Sel Lavé (kg)</label><input type="number" value={aromeForm.sel} onChange={e=>setAromeForm({...aromeForm, sel: Number(e.target.value)})} max={erpData.stocks.selLave||0} required min="1" className="w-full p-3 border-2 rounded-xl text-lg font-bold bg-slate-50" /></div>
+                                <div><label className="block text-sm font-bold text-orange-700 mb-1">Épices (kg)</label><input type="number" value={aromeForm.intrant} onChange={e=>setAromeForm({...aromeForm, intrant: Number(e.target.value)})} max={erpData.stocks.intrantsAromes||0} required min="0.1" step="0.1" className="w-full p-3 border-2 border-orange-200 rounded-xl text-lg font-bold bg-orange-50 text-orange-800" /></div>
+                            </div>
+                            <div>
+                               <label className="block text-sm font-bold text-gray-700 mb-1">Opérateur(s)</label>
+                               <input type="text" value={aromeForm.operateurs} onChange={e=>setAromeForm({...aromeForm, operateurs: e.target.value})} placeholder="Ex: Equipe B..." required className="w-full p-3 border border-gray-300 rounded-xl bg-white" />
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-lg text-center"><span className="text-xs text-gray-500">Rendement estimé :</span> <strong className="text-orange-600">~{Math.floor(aromeForm.sel * 4)} Pots Premium</strong></div>
+                            <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl shadow-md">Fabriquer & Conditionner</button>
+                        </form>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-green-100 overflow-hidden">
+                        <div className="bg-gradient-to-r from-green-600 to-emerald-700 text-white p-4 font-bold flex items-center justify-between"><div className="flex items-center gap-2"><RefreshCw size={18}/> Phase 2 : Valorisation Freinte</div> <span className="text-sm bg-white/20 px-2 py-1 rounded">Freinte dispo: <strong>{erpData.stocks.freinte||0} kg</strong></span></div>
+                        <form onSubmit={handleProdBloc} className="p-6 space-y-4">
+                            <p className="text-sm text-gray-500 mb-4">Transformation des refus de tamis et impuretés en Blocs à lécher pour le bétail.</p>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Freinte à compacter (kg)</label>
+                                <input type="number" value={blocForm.freinte} onChange={e=>setBlocForm({...blocForm, freinte: Number(e.target.value)})} max={erpData.stocks.freinte||0} required min="5" step="5" className="w-full p-3 border-2 rounded-xl text-lg font-bold bg-slate-50" />
+                            </div>
+                            <div>
+                               <label className="block text-sm font-bold text-gray-700 mb-1">Opérateur(s)</label>
+                               <input type="text" value={blocForm.operateurs} onChange={e=>setBlocForm({...blocForm, operateurs: e.target.value})} placeholder="Ex: Cheikh..." required className="w-full p-3 border border-gray-300 rounded-xl bg-white" />
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-lg text-center"><span className="text-xs text-gray-500">Conversion (5kg = 1 Bloc) :</span> <strong className="text-green-700">~{Math.floor(blocForm.freinte / 5)} Blocs Bétail</strong></div>
+                            <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-md">Compacter (Zéro Déchet)</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div className="space-y-6">
+                    <h3 className="text-lg font-black text-purple-800 flex items-center gap-2 border-b-2 border-purple-200 pb-2"><Beaker size={20} className="text-purple-600"/> Validation Labo & QHSE</h3>
+                    
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="p-4 border-b bg-purple-50 font-bold flex justify-between items-center"><span className="text-purple-800 flex items-center gap-2"><Award size={18}/> Contrôle Qualité des Lots (Interne)</span></div>
+                        <div className="p-6 bg-slate-50 max-h-[850px] overflow-y-auto">
+                            {!(erpData.lots || []).filter(l=>l.status === 'Attente Labo').length ? (
+                                <div className="text-center p-10 text-gray-400">
+                                    <CheckCircle size={48} className="mx-auto mb-4 opacity-30"/>
+                                    <p className="font-bold">Aucun lot en attente.</p>
+                                    <p className="text-xs mt-1">Les lots broyés apparaîtront ici.</p>
+                                </div>
+                            ) : (
+                                (erpData.lots || []).filter(l=>l.status === 'Attente Labo').map(lot => ( <LaboLotCard key={lot.id} lot={lot} onValidate={handleValidationLabo} currentUser={currentUser} /> ))
+                            )}
+                        </div>
+                    </div>
+                    
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                       <div className="bg-orange-500 text-white p-4 font-bold flex justify-between items-center"><span className="flex items-center gap-2"><FileWarning size={18}/> Non-Conformités (NC)</span><button onClick={()=>setActionModal({type: 'edit_nc', obj: { status: 'Ouvert' }})} className="bg-white/20 px-3 py-1 text-xs rounded hover:bg-white/30 flex items-center gap-1 shadow">+ Créer Fiche NC</button></div>
+                       <div className="p-4 space-y-3">
+                          {!(erpData.qhse?.nonConformites?.length > 0) ? <p className="text-gray-400 text-sm text-center">Aucune Non-Conformité active.</p> : (
+                              erpData.qhse.nonConformites.slice(0,3).map(nc => (
+                                 <div key={nc.id} className={`p-4 rounded-xl border flex justify-between items-start ${nc.status === 'Ouvert' ? 'bg-red-50 border-red-200' : (nc.status === 'En cours' ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200')}`}>
+                                    <div className="flex-1">
+                                       <div className="flex items-center gap-2 mb-1"><h4 className="font-bold text-[#0D3B48]">{nc.id}</h4><span className={`text-[10px] px-2 py-0.5 rounded font-black uppercase shadow-sm border ${nc.status === 'Ouvert' ? 'bg-red-100 text-red-800 border-red-200' : (nc.status === 'Résolu' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-orange-100 text-orange-800 border-orange-200')}`}>{nc.status}</span></div>
+                                       <p className="text-xs text-gray-500 mb-2">{new Date(nc.date).toLocaleString()} | Créé par: {nc.reporter}</p>
+                                       <p className="text-sm font-bold text-gray-800 mb-2 line-clamp-2">{nc.desc}</p>
+                                       {nc.actionCorrective && <p className="text-sm text-green-800 bg-green-50 p-2 rounded-lg border border-green-200">💡 <strong>Action:</strong> {nc.actionCorrective}</p>}
+                                    </div>
+                                    <button onClick={()=>setActionModal({type: 'edit_nc', obj: nc})} className="text-gray-400 hover:text-[#0D3B48] bg-white p-2 rounded-lg shadow-sm border ml-4"><Edit size={16}/></button>
+                                 </div>
+                              ))
+                          )}
+                       </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"><div className="bg-[#0D3B48] text-white p-4 font-bold flex items-center gap-2"><CheckSquare size={18}/> Checklist Hygiène Usine</div><div className="p-4 space-y-2">{(erpData.qhse?.checklistHygiene || []).map(chk => (<label key={chk.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded border cursor-pointer hover:bg-gray-100"><input type="checkbox" checked={chk.fait} onChange={(e) => { updateErpState(d => { const item = d.qhse.checklistHygiene.find(x=>x.id===chk.id); if(item) item.fait = e.target.checked; }); }} className="w-5 h-5 accent-[#2EC4B6]" /><span className={`text-sm ${chk.fait ? 'line-through text-gray-400' : 'font-bold text-gray-700'}`}>{chk.tache}</span></label>))}</div></div>
+                </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'conditionnement' && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-2"><Package className="text-[#2EC4B6]"/> Conditionnement Intelligent</h2>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-6 space-y-6">
+                {!scannedLot ? (
+                  <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50"><QrCode size={64} className="mx-auto text-gray-400 mb-4" /><h3 className="text-xl font-bold text-[#0D3B48] mb-2">Scan QR de Vérification</h3><button onClick={() => { const availableLot = (erpData.lots || []).find(l => l.resteKg > 0 && l.status === 'Conforme'); if(availableLot) setScannedLot(availableLot); else showToast("Aucun lot conforme et disponible !", "error"); }} className="bg-[#0D3B48] hover:bg-slate-800 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 mx-auto shadow-md mt-6">Simuler le Scan d'un Lot Conforme</button></div>
+                ) : (
+                  <form onSubmit={handleConditionnement} className="space-y-6">
+                    <div className="bg-green-50 border border-green-200 p-5 rounded-2xl flex justify-between items-center shadow-sm"><div><p className="text-green-800 font-black text-lg flex items-center gap-2"><CheckCircle size={20}/> LOT VÉRIFIÉ : {scannedLot.id}</p><p className="text-sm text-green-700 mt-1 font-semibold">Stock à emballer max : {scannedLot.resteKg} kg</p></div><div className="flex items-center gap-3"><button type="button" onClick={()=>{setConditForm({s50: Math.floor(Math.random()*10), s25: 0, s1: 0, s05: 0, operateurs: conditForm.operateurs}); showToast("Balance connectée : Poids récupéré.");}} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow hover:bg-blue-700 flex items-center gap-2"><Radio size={16}/> Importer Poids Balance</button><button type="button" onClick={()=>imprimerDocument('qr_label', { id: scannedLot.id })} className="bg-white text-[#2EC4B6] border border-[#2EC4B6] px-4 py-2 rounded-lg font-bold text-sm shadow hover:bg-teal-50 flex items-center gap-2"><QrCode size={16}/> Imprimer Étiquette QR</button><button type="button" onClick={()=>{setScannedLot(null); setConditForm(INIT_CONDIT);}} className="text-red-500 hover:text-red-700 bg-white p-2 rounded-full shadow"><X size={20}/></button></div></div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6"><div><label className="block text-sm font-bold text-gray-700 mb-1">Sacs 50kg</label><input type="number" value={conditForm.s50} onChange={e=>setConditForm({...conditForm, s50: Number(e.target.value)})} min="0" className="w-full p-4 border-2 rounded-xl text-xl font-bold text-center bg-slate-50" /></div><div><label className="block text-sm font-bold text-gray-700 mb-1">Sacs 25kg</label><input type="number" value={conditForm.s25} onChange={e=>setConditForm({...conditForm, s25: Number(e.target.value)})} min="0" className="w-full p-4 border-2 rounded-xl text-xl font-bold text-center bg-slate-50" /></div><div><label className="block text-sm font-bold text-gray-700 mb-1">Sachets 1kg</label><input type="number" value={conditForm.s1} onChange={e=>setConditForm({...conditForm, s1: Number(e.target.value)})} min="0" className="w-full p-4 border-2 rounded-xl text-xl font-bold text-center bg-slate-50" /></div><div><label className="block text-sm font-bold text-gray-700 mb-1">Sachets 500g</label><input type="number" value={conditForm.s05} onChange={e=>setConditForm({...conditForm, s05: Number(e.target.value)})} min="0" className="w-full p-4 border-2 rounded-xl text-xl font-bold text-center bg-slate-50" /></div></div>
+                    <div>
+                       <label className="block text-sm font-bold text-gray-700 mb-1">Équipe de Conditionnement</label>
+                       <input type="text" value={conditForm.operateurs} onChange={e=>setConditForm({...conditForm, operateurs: e.target.value})} placeholder="Ex: Moussa, Awa..." required className="w-full p-3 border border-gray-300 rounded-xl bg-white" />
+                    </div>
+                    <button type="submit" className="w-full bg-[#2EC4B6] hover:bg-[#25A196] text-white font-bold py-4 rounded-xl text-lg shadow-md transition-colors">Valider la Ligne (Déduit Sel + Emballages)</button>
+                  </form>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'frais' && (
+           <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-2"><Receipt className="text-[#2EC4B6]"/> Frais Généraux & Bons de Commande</h2>
+              
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                 <div className="bg-slate-800 text-white p-4 font-bold flex justify-between items-center"><span className="flex items-center gap-2"><ShoppingBag size={18}/> Registre des PO (Bons de Commande)</span> <span className="bg-purple-600 px-2 py-1 rounded text-xs">Générés par l'IA: {(erpData.autoPO||[]).length}</span></div>
+                 <div className="p-4">
+                    {(erpData.autoPO||[]).length === 0 ? <p className="text-gray-400 text-sm text-center">Aucun PO en attente.</p> : (
+                       <div className="space-y-2">
+                          {(erpData.autoPO||[]).map(po => (
+                             <div key={po.id} className="flex justify-between items-center p-3 bg-gray-50 border rounded-lg">
+                                <div><p className="font-bold text-[#0D3B48]">{po.produit} - {po.qty} unités</p><p className="text-xs text-gray-500">Fournisseur: {po.fournisseur} | {new Date(po.date).toLocaleDateString()}</p></div>
+                                <div className="flex items-center gap-2">
+                                   <span className="bg-yellow-100 text-yellow-800 text-[10px] px-2 py-1 rounded font-bold uppercase">{po.status}</span>
+                                   <button onClick={()=>{ imprimerDocument('po', po); updateErpState(d => { const p = d.autoPO.find(x=>x.id===po.id); if(p) p.status = 'Envoyé'; }, `Impression du PO: ${po.id}`); }} className="bg-[#2EC4B6] text-white px-3 py-1 rounded text-xs font-bold">Imprimer PO</button>
+                                </div>
+                             </div>
+                          ))}
+                       </div>
+                    )}
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"><div className="bg-[#0D3B48] text-white p-4 font-bold flex items-center gap-2"><DollarSign size={18}/> Paiement des Factures (OPEX / Fixes)</div><form onSubmit={handlePaiementFacture} className="p-6 space-y-4"><div><label className="block text-sm font-bold mb-1">Catégorie de la dépense</label><select value={factureForm.type} onChange={e=>setFactureForm({...factureForm, type: e.target.value})} className="w-full p-3 border rounded bg-gray-50"><option value="Loyer">Loyer Usine</option><option value="Electricite">Électricité (SENELEC)</option><option value="Eau">Eau (SEN'EAU)</option><option value="Fournitures">Petit Matériel / EPI</option><option value="Taxes">Taxes & Impôts</option></select></div><div><label className="block text-sm font-bold">Montant payé (FCFA)</label><input type="number" value={factureForm.montant} onChange={e=>setFactureForm({...factureForm, montant: Number(e.target.value)})} required min="1" className="w-full p-3 border rounded" /></div><div><label className="block text-sm font-bold">Description courte</label><input type="text" value={factureForm.desc} onChange={e=>setFactureForm({...factureForm, desc: e.target.value})} required className="w-full p-3 border rounded" placeholder="Ex: SENELEC Facture Mai"/></div>
+                 
+                 <div className="flex gap-2 p-2 bg-gray-50 rounded border">
+                       <label className={`flex-1 text-center py-2 rounded font-bold text-sm cursor-pointer ${paymentMethod==='cash' ? 'bg-[#0D3B48] text-white shadow' : 'text-gray-500 hover:bg-gray-200'}`}><input type="radio" name="pay" className="hidden" checked={paymentMethod==='cash'} onChange={()=>setPaymentMethod('cash')}/> Caisse</label>
+                       <label className={`flex-1 text-center py-2 rounded font-bold text-sm cursor-pointer flex justify-center items-center gap-1 ${paymentMethod==='wave' ? 'bg-blue-500 text-white shadow' : 'text-gray-500 hover:bg-gray-200'}`}><input type="radio" name="pay" className="hidden" checked={paymentMethod==='wave'} onChange={()=>setPaymentMethod('wave')}/><Smartphone size={14}/> Wave</label>
+                 </div>
+
+                 <button type="submit" className="w-full bg-[#C29B38] hover:bg-yellow-600 text-white font-bold py-3 rounded shadow-md">Encaisser le Décaissement</button></form></div>
+                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"><div className="bg-slate-800 text-white p-4 font-bold flex items-center gap-2"><ShoppingBag size={18}/> Éditer un Bon de Commande (Manuel)</div><div className="p-6 space-y-4"><p className="text-sm text-gray-600 mb-4">Générez un document officiel en PDF pour commander vos emballages ou votre KIO3.</p><form onSubmit={(e) => { e.preventDefault(); const newId = `PO-${Date.now().toString().slice(-4)}`; imprimerDocument('po', { fournisseur: e.target.fournisseur.value, produit: e.target.produit.value, qty: e.target.qty.value, id: newId }); showToast("Bon de Commande (PO) généré."); updateErpState(d => {}, `Édition manuelle d'un PO (${newId})`); e.target.reset(); }} className="space-y-4"><div><label className="block text-sm font-bold">Nom du Fournisseur</label><input type="text" name="fournisseur" required className="w-full p-3 border rounded" /></div><div><label className="block text-sm font-bold">Marchandise à commander</label><input type="text" name="produit" required className="w-full p-3 border rounded" /></div><div><label className="block text-sm font-bold">Quantité souhaitée</label><input type="number" name="qty" required min="1" className="w-full p-3 border rounded" /></div><button type="submit" className="w-full bg-[#2EC4B6] hover:bg-[#25A196] text-white font-bold py-3 rounded shadow-md flex items-center justify-center gap-2"><FileText size={18}/> Générer & Imprimer le Bon</button></form></div></div>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'b2b' && (
+           <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-2"><ShoppingCart className="text-[#2EC4B6]"/> Ventes Multi-Produits & Livraisons</h2>
+              
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-fit lg:col-span-2 mt-2">
+                 <div className="bg-[#2EC4B6] text-white p-4 font-bold flex justify-between items-center">
+                    <span className="flex items-center gap-2"><FileText size={18}/> Registre des Factures (Imports & Exports)</span>
+                    <div className="flex gap-2">
+                       <button onClick={exportFacturesCSV} className="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"><Download size={14}/> CSV (Excel)</button>
+                       <button onClick={exportFacturesJSON} className="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"><FileJson size={14}/> Backup JSON</button>
+                       <label className="bg-[#0D3B48] hover:bg-slate-800 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm">
+                          <Upload size={14}/> Importer
+                          <input type="file" accept=".json" onChange={importFacturesJSON} className="hidden" />
+                       </label>
+                    </div>
+                 </div>
+                 <div className="p-4 overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                       <thead>
+                          <tr className="bg-slate-50 text-slate-600">
+                             <th className="p-3 font-bold rounded-l-lg">Réf Facture</th>
+                             <th className="p-3 font-bold">Date</th>
+                             <th className="p-3 font-bold">Client</th>
+                             <th className="p-3 font-bold">Détail du Panier</th>
+                             <th className="p-3 font-bold text-right">Montant</th>
+                             <th className="p-3 font-bold text-center rounded-r-lg">Action</th>
+                          </tr>
+                       </thead>
+                       <tbody>
+                          {(erpData.transactions || []).filter(t => t.type === 'VENTE').slice(0, 10).map(t => (
+                             <tr key={t.id} className="border-t border-slate-100 hover:bg-slate-50">
+                                <td className="p-3 font-mono text-xs">{t.id}</td>
+                                <td className="p-3">{new Date(t.date).toLocaleDateString()}</td>
+                                <td className="p-3 font-bold text-[#0D3B48]">{t.client || 'Comptoir'}</td>
+                                <td className="p-3 text-gray-600 text-xs">{t.items ? t.items.map(i => `${i.qty}x ${i.produit}`).join(', ') : t.desc}</td>
+                                <td className="p-3 text-right font-bold text-emerald-600">{(t.montant || 0).toLocaleString()} F</td>
+                                <td className="p-3 text-center">
+                                   <button onClick={() => imprimerDocument('facture', { client: t.client || 'Comptoir', items: t.items, produit: t.produit, qty: t.qty, montant: t.montant, id: t.id })} className="text-[#2EC4B6] hover:text-[#0D3B48] bg-teal-50 px-3 py-1 rounded-lg text-xs font-bold transition-colors">Ré-imprimer</button>
+                                </td>
+                             </tr>
+                          ))}
+                          {(erpData.transactions || []).filter(t => t.type === 'VENTE').length === 0 && <tr><td colSpan="6" className="text-center p-6 text-gray-400 font-medium">Aucune facture enregistrée.</td></tr>}
+                       </tbody>
+                    </table>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-fit">
+                    <div className="bg-[#2EC4B6] text-white p-4 font-bold flex justify-between items-center"><span className="flex items-center gap-2"><DollarSign size={18}/> Vente Guichet (Panier)</span><label className="flex items-center gap-2 text-xs bg-white/20 px-2 py-1 rounded cursor-pointer"><input type="checkbox" checked={isExportVente} onChange={e=>setIsExportVente(e.target.checked)} className="accent-[#0D3B48]" /> Export CEDEAO</label></div>
+                    <form onSubmit={handleVente} className="p-6">
+                       
+                       <div className="space-y-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                          {venteForm.items.map((item, idx) => (
+                             <div key={idx} className="flex gap-2 items-center">
+                                <div className="flex-1">
+                                   <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Produit</label>
+                                   <select value={item.produit} onChange={e => {
+                                      const val = e.target.value;
+                                      const newItems = [...venteForm.items]; 
+                                      newItems[idx].produit = val; 
+                                      newItems[idx].prix = getBpPrice(val);
+                                      const total = calcTotalVente(newItems);
+                                      setVenteForm({...venteForm, items: newItems, montantEncaisse: total});
+                                   }} className="w-full p-2 border rounded font-bold text-[#0D3B48]">
+                                      {Object.keys(erpData.produitsFinis || {}).map(p => <option key={p} value={p}>{p.replace('_', ' ')} (Dispo: {erpData.produitsFinis[p] || 0})</option>)}
+                                   </select>
+                                </div>
+                                <div className="w-20">
+                                   <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">Qté</label>
+                                   <input type="number" value={item.qty} onChange={e => {
+                                      const newItems = [...venteForm.items]; newItems[idx].qty = Number(e.target.value); 
+                                      const total = calcTotalVente(newItems);
+                                      setVenteForm({...venteForm, items: newItems, montantEncaisse: total});
+                                   }} required min="1" className="w-full p-2 border rounded text-center font-bold"/>
+                                </div>
+                                <div className="w-24">
+                                   <label className="block text-[10px] font-bold text-gray-500 mb-1 uppercase">P.U (F)</label>
+                                   <input type="number" value={item.prix} onChange={e => {
+                                      const newItems = [...venteForm.items]; newItems[idx].prix = Number(e.target.value); 
+                                      const total = calcTotalVente(newItems);
+                                      setVenteForm({...venteForm, items: newItems, montantEncaisse: total});
+                                   }} required min="0" step="any" className="w-full p-2 border rounded text-center font-bold"/>
+                                </div>
+                                {venteForm.items.length > 1 && (
+                                   <button type="button" onClick={() => {
+                                      const newItems = venteForm.items.filter((_, i) => i !== idx); 
+                                      const total = calcTotalVente(newItems);
+                                      setVenteForm({...venteForm, items: newItems, montantEncaisse: total});
+                                   }} className="p-2 mt-4 text-red-500 hover:text-red-700 bg-red-50 rounded"><Trash2 size={16}/></button>
+                                )}
+                             </div>
+                          ))}
+                          <button type="button" onClick={() => setVenteForm({...venteForm, items: [...venteForm.items, { produit: 'Sel_50kg', qty: 1, prix: 7250 }]})} className="text-[#2EC4B6] font-bold text-sm flex items-center gap-1 hover:underline mt-2"><PlusCircle size={14}/> Ajouter un produit</button>
+                       </div>
+
+                       <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex justify-between items-center mb-4">
+                          <span className="text-sm text-amber-900 font-bold">Total Facture :</span>
+                          <span className="text-3xl font-black text-amber-600">{calcTotalVente(venteForm.items).toLocaleString()} F</span>
+                       </div>
+
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className="col-span-2"><label className="block text-sm font-bold text-gray-700 mb-1">Dépôt Expédition</label><select value={venteForm.depot} onChange={e=>setVenteForm({...venteForm, depot: e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"><option value="usine">Usine (Rufisque)</option>{(erpData.depots || []).map(d => <option key={d.id} value={d.id}>{d.nom}</option>)}</select></div>
+                          <div className="col-span-2"><label className="block text-sm font-bold text-gray-700 mb-1">Client (CRM)</label><select value={venteForm.client} onChange={e=>setVenteForm({...venteForm, client: e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50 font-bold"><option value="comptoir">--- Client Comptoir Anonyme ---</option>{(erpData.clients || []).map(c => <option key={c.id} value={c.id}>{c.nom} (Plafond Reste: {(Math.max(0, c.plafond - (c.dette||0))).toLocaleString()})</option>)}</select></div>
+                       </div>
+                       
+                       <div className="mt-4">
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Vendeur(s) / Intervenant(s)</label>
+                          <input type="text" value={venteForm.operateurs} onChange={e=>setVenteForm({...venteForm, operateurs: e.target.value})} placeholder="Ex: Awa..." className="w-full p-3 border border-gray-300 rounded-xl bg-white text-gray-800" />
+                       </div>
+
+                       <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 space-y-2 mt-4">
+                          <label className="block text-sm font-bold text-gray-700">Montant Encaissé Immédiatement (F)</label>
+                          <input type="number" value={venteForm.montantEncaisse} onChange={e=>setVenteForm({...venteForm, montantEncaisse: Number(e.target.value)})} max={calcTotalVente(venteForm.items)} className="w-full p-3 border rounded-xl font-black text-xl text-emerald-600 bg-white" />
+                          {calcTotalVente(venteForm.items) - venteForm.montantEncaisse > 0 && (
+                              <div className={`text-sm font-bold p-3 rounded-lg ${erpData.config?.forcePaiementComptant ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
+                                 Reste à payer (Crédit Client) : {(calcTotalVente(venteForm.items) - venteForm.montantEncaisse).toLocaleString()} F
+                                 {erpData.config?.forcePaiementComptant && <span className="block mt-1 text-xs">🔒 Opération bloquée (Le crédit est désactivé)</span>}
+                              </div>
+                          )}
+                       </div>
+
+                       <div className="flex gap-2 p-2 bg-gray-50 rounded border mt-4">
+                          <label className={`flex-1 text-center py-2 rounded font-bold text-sm cursor-pointer ${paymentMethod==='cash' ? 'bg-[#0D3B48] text-white shadow' : 'text-gray-500 hover:bg-gray-200'}`}><input type="radio" name="pay" className="hidden" checked={paymentMethod==='cash'} onChange={()=>setPaymentMethod('cash')}/> Espèces</label>
+                          <label className={`flex-1 text-center py-2 rounded font-bold text-sm cursor-pointer flex justify-center items-center gap-1 ${paymentMethod==='wave' ? 'bg-blue-500 text-white shadow' : 'text-gray-500 hover:bg-gray-200'}`}><input type="radio" name="pay" className="hidden" checked={paymentMethod==='wave'} onChange={()=>setPaymentMethod('wave')}/><Smartphone size={14}/> Wave Pay</label>
+                       </div>
+
+                       <div className="flex flex-col gap-3 mt-4">
+                          <label className="flex items-center gap-2 text-sm font-bold text-blue-600 bg-blue-50 p-3 rounded-xl border border-blue-200 cursor-pointer"><input type="checkbox" checked={venteForm.besoinLivraison} onChange={e=>setVenteForm({...venteForm, besoinLivraison: e.target.checked})} className="accent-blue-600 w-4 h-4" /> Nécessite une livraison (Reste payé à la réception)</label>
+                       </div>
+                       {venteForm.besoinLivraison && <div><input type="text" placeholder="Adresse complète de livraison" value={venteForm.adresse} onChange={e=>setVenteForm({...venteForm, adresse: e.target.value})} required className="w-full p-3 border rounded bg-white mt-2" /></div>}
+                       <button type="submit" className={`w-full text-white font-bold py-4 rounded-xl shadow-md transition-colors mt-4 ${isExportVente ? 'bg-[#C29B38] hover:bg-yellow-600' : (venteForm.besoinLivraison ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#0D3B48] hover:bg-slate-800')}`}>{isExportVente ? 'Valider Exportation & COA' : (venteForm.besoinLivraison ? 'Ajouter aux livraisons en cours' : (paymentMethod !== 'cash' ? `Push USSD ${paymentMethod.toUpperCase()} & Valider` : 'Encaisser / Valider Vente'))}</button>
+                    </form>
+                 </div>
+                 
+                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-fit">
+                    <div className="bg-[#0D3B48] text-white p-4 font-bold flex justify-between items-center"><span className="flex items-center gap-2"><Globe size={18}/> Commandes B2B (E-Portail)</span><span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">{(erpData.commandesB2B || []).filter(c=>c.status==='En Attente').length}</span></div>
+                    <div className="p-4 space-y-4">
+                       {(erpData.commandesB2B || []).map(cmd => (
+                          <div key={cmd.id} className={`p-5 border rounded-xl shadow-sm ${cmd.status==='En Attente' ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'}`}>
+                             <div className="flex justify-between mb-2"><h4 className="font-bold text-[#0D3B48] text-lg">{cmd.client}</h4><span className={`text-[10px] uppercase font-bold px-2 py-1 rounded ${cmd.status==='En Attente'?'bg-orange-200 text-orange-800':'bg-green-200 text-green-800'}`}>{cmd.status}</span></div>
+                             <div className="mb-2">
+                               {cmd.items ? cmd.items.map((it, i) => <p key={i} className="text-xl font-black">{it.qty}x {it.produit.replace('_', ' ')}</p>) : <p className="text-xl font-black">{cmd.qty}x {cmd.produit?.replace('_', ' ')}</p>}
+                             </div>
+                             {cmd.status === 'En Attente' && (<button onClick={() => validerCommandeB2B(cmd.id)} className="w-full py-3 bg-green-600 text-white font-bold rounded-xl shadow hover:bg-green-700 mt-2">Expédier (Facturer Dette)</button>)}
+                          </div>
+                       ))}
+                       {(erpData.commandesB2B || []).length === 0 && <p className="text-center text-gray-400 py-8 font-medium">Aucune commande en ligne pour le moment.</p>}
+                    </div>
+                 </div>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'crm' && (
+          <div className="space-y-6">
+             <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-2"><Briefcase/> Portefeuille Clients (CRM)</h2>
+                <button onClick={()=>setActionModal({ type: 'edit_client', obj: { nom: '', pin: '', type: 'Boulangerie (B2B)', plafond: 0, dette: 0 } })} className="bg-[#2EC4B6] text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-[#0D3B48]"><PlusCircle size={16}/> Nouveau Client</button>
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {(erpData.clients || []).map(c => {
+                   const pctDette = c.plafond > 0 ? ((c.dette || 0) / c.plafond) * 100 : 0; const isBlocked = pctDette >= 100;
+                   return (
+                      <div key={c.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 relative">
+                         {isBlocked && <div className="absolute top-2 right-2 bg-red-100 text-red-700 text-[10px] px-2 py-1 font-bold rounded uppercase">Bloqué (Plafond)</div>}
+                         <h3 className="font-bold text-lg text-[#0D3B48] flex items-center justify-between">{c.nom} <button onClick={()=>setActionModal({ type: 'edit_client', obj: c })} className="text-gray-400 hover:text-[#2EC4B6]"><Edit size={16}/></button></h3>
+                         <p className="text-xs text-gray-500 mb-4">{c.type} (PIN Client: {c.pin})</p>
+                         <div className="mb-4"><div className="flex justify-between text-xs mb-1"><span>Dette: <strong>{(c.dette || 0).toLocaleString()} F</strong></span><span className="text-gray-400">Max: {(c.plafond || 0).toLocaleString()} F</span></div><div className="w-full bg-gray-200 rounded-full h-2"><div className={`h-2 rounded-full ${isBlocked ? 'bg-red-500' : (pctDette > 75 ? 'bg-orange-400' : 'bg-green-500')}`} style={{width: `${Math.min(100, pctDette)}%`}}></div></div></div>
+                         <p className="text-xs text-gray-600 mb-4">Total Achat Historique: {(c.totalAchats || 0).toLocaleString()} F</p>
+                         <button onClick={() => {
+                            if(!c.dette || c.dette <= 0) return showToast("Aucune dette à régler.", "error");
+                            setActionModal({ type: 'remboursement', obj: c });
+                         }} className="w-full py-2 bg-gray-100 text-gray-700 rounded font-bold text-sm hover:bg-gray-200 border">Encaisser Remboursement Dette</button>
+                      </div>
+                   )
+                })}
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'analytique' && (
+           <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                 <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-2"><Calculator className="text-[#2EC4B6]"/> Comptabilité Analytique & SYSCOHADA</h2>
+                 <button onClick={exportSYSCOHADA} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-sm"><Download size={16}/> Exporter SYSCOHADA (Expert-Comptable)</button>
+              </div>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                 <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl shadow-sm border border-indigo-200 p-6">
+                    <h3 className="font-bold text-indigo-900 mb-4 flex items-center gap-2"><Briefcase size={20}/> Suivi du ROI (Payback)</h3>
+                    <p className="text-sm text-indigo-700 mb-6">Objectif BP : Remboursement du CAPEX initial de {getPnl().capex.toLocaleString()} F en moins de 3 mois.</p>
+                    <div className="bg-white p-4 rounded-xl border border-indigo-100 mb-4"><div className="flex justify-between text-sm font-bold mb-2"><span className="text-gray-600">Bénéfice Net Cumulé généré</span><span className="text-green-600">{Math.max(0, getPnl().resultatNet).toLocaleString()} F / {getPnl().capex.toLocaleString()} F</span></div><div className="w-full bg-gray-200 rounded-full h-4"><div className="h-4 rounded-full bg-indigo-600" style={{width: `${Math.min(100, (Math.max(0, getPnl().resultatNet) / getPnl().capex) * 100)}%`}}></div></div></div>
+                 </div>
+                 
+                 <div className="bg-gradient-to-br from-teal-50 to-emerald-50 rounded-xl shadow-sm border border-teal-200 p-6">
+                    <h3 className="font-bold text-teal-900 mb-4 flex items-center gap-2"><Target size={20}/> Objectif Bénéfice BP (Année 1)</h3>
+                    <p className="text-sm text-teal-700 mb-6">Le Business Plan prévoit un bénéfice net annuel de 6 088 000 FCFA après paiement de tous les frais.</p>
+                    <div className="bg-white p-4 rounded-xl border border-teal-100 mb-4"><div className="flex justify-between text-sm font-bold mb-2"><span className="text-gray-600">Progression Annuelle</span><span className="text-teal-600">{Math.max(0, getPnl().resultatNet).toLocaleString()} F / 6 088 000 F</span></div><div className="w-full bg-gray-200 rounded-full h-4"><div className="h-4 rounded-full bg-teal-500" style={{width: `${Math.min(100, (Math.max(0, getPnl().resultatNet) / 6088000) * 100)}%`}}></div></div></div>
+                 </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+                 <h3 className="text-center font-black text-xl mb-6 border-b-4 border-[#0D3B48] inline-block pb-2">BILAN FINANCIER COMPLET (Net Absolu)</h3>
+                 <div className="space-y-4 text-lg">
+                    <div className="flex justify-between items-center bg-gray-50 p-4 rounded"><span className="font-bold text-gray-700">Chiffre d'Affaires Global (Ventes)</span><span className="font-black text-green-600">{getPnl().ca.toLocaleString()} FCFA</span></div>
+                    <div className="flex justify-between items-center bg-green-50 p-4 rounded text-green-700 border-l-4 border-green-500"><span className="font-bold">Valorisation Zéro Déchet (Freinte en stock @ 50F/kg)</span><span className="font-black">+ {((erpData.stocks.freinte || 0) * 50).toLocaleString()} FCFA</span></div>
+                    <div className="flex justify-between items-center bg-gray-50 p-4 rounded text-red-600 border-l-4 border-red-500"><span className="font-bold">Coût d'Achats (Sel Brut & Intrants)</span><span className="font-black">- {getPnl().achats.toLocaleString()} FCFA</span></div>
+                    <div className="flex justify-between items-center p-4 border-b-2 border-gray-300"><span className="font-black uppercase tracking-wider text-xl">Marge Brute Opérationnelle</span><span className="font-black text-2xl text-[#0D3B48]">{(getPnl().margeB + ((erpData.stocks.freinte || 0) * 50)).toLocaleString()} FCFA</span></div>
+                    <div className="flex justify-between items-center bg-gray-50 p-4 rounded text-orange-600 border-l-4 border-orange-500"><span className="font-bold">Charges Variables (Salaires, Carburant, Avances)</span><span className="font-black">- {getPnl().salaires.toLocaleString()} FCFA</span></div>
+                    <div className="flex justify-between items-center bg-gray-50 p-4 rounded text-purple-600 border-l-4 border-purple-500"><span className="font-bold">Frais Fixes & Factures (Loyer, SENELEC, Eau)</span><span className="font-black">- {getPnl().facturesFraisFixes.toLocaleString()} FCFA</span></div>
+                    <div className="flex justify-between items-center p-6 bg-[#0D3B48] text-white rounded-xl mt-8 shadow-lg"><span className="font-black uppercase tracking-wider text-2xl">Bénéfice Net Absolu</span><span className={`font-black text-3xl ${(getPnl().resultatNet + ((erpData.stocks.freinte || 0) * 50)) >= 0 ? 'text-[#2EC4B6]' : 'text-red-400'}`}>{(getPnl().resultatNet + ((erpData.stocks.freinte || 0) * 50)).toLocaleString()} FCFA</span></div>
+                 </div>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'registre' && (
+           <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                 <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-2"><Database className="text-[#2EC4B6]"/> Registre Général des Opérations</h2>
+                 <div className="flex gap-3">
+                    <div className="bg-white px-4 py-2 rounded-xl shadow-sm border font-bold text-[#0D3B48] flex items-center gap-2">
+                       Solde Trésorerie: <span className="text-[#2EC4B6] text-xl font-black">{(erpData.tresorerie || 0).toLocaleString()} F</span>
+                    </div>
+                    <button onClick={exportRegistreCSV} className="bg-[#0D3B48] text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-[#2EC4B6] shadow-md transition-colors"><Download size={16}/> CSV</button>
+                 </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                 <div className="overflow-x-auto max-h-[70vh]">
+                    <table className="w-full text-left text-sm">
+                       <thead className="sticky top-0 bg-slate-800 text-white shadow-sm z-10">
+                          <tr>
+                             <th className="p-4 font-bold rounded-tl-xl">Réf. Transaction</th>
+                             <th className="p-4 font-bold">Date & Heure</th>
+                             <th className="p-4 font-bold text-center">Catégorie</th>
+                             <th className="p-4 font-bold">Description de l'opération</th>
+                             <th className="p-4 font-bold text-right rounded-tr-xl">Montant net (FCFA)</th>
+                          </tr>
+                       </thead>
+                       <tbody>
+                          {(erpData.transactions || []).map(t => (
+                             <tr key={t.id} className="border-b hover:bg-slate-50 transition-colors">
+                                <td className="p-4 font-mono text-xs text-gray-500">{t.id}</td>
+                                <td className="p-4 font-medium text-gray-700">{new Date(t.date).toLocaleString('fr-FR', {dateStyle: 'short', timeStyle: 'short'})}</td>
+                                <td className="p-4 text-center">
+                                   <span className={`px-3 py-1 rounded text-[10px] uppercase font-black shadow-sm tracking-wide ${t.type === 'VENTE' ? 'bg-green-100 text-green-700 border border-green-200' : (t.type === 'ACHAT' ? 'bg-orange-100 text-orange-700 border border-orange-200' : (t.type === 'FACTURE' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-blue-100 text-blue-700 border border-blue-200'))}`}>
+                                      {t.type}
+                                   </span>
+                                </td>
+                                <td className="p-4 font-medium text-[#0D3B48]">
+                                   {t.desc}
+                                   {t.auteur && <div className="text-[10px] text-gray-500 mt-1 uppercase font-bold">Opérateur: {t.auteur}</div>}
+                                </td>
+                                <td className={`p-4 text-right font-black text-lg ${t.montant >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                   {t.montant > 0 ? '+' : ''}{(t.montant || 0).toLocaleString()}
+                                </td>
+                             </tr>
+                          ))}
+                          {(erpData.transactions || []).length === 0 && (
+                             <tr><td colSpan="5" className="p-8 text-center text-gray-400 font-medium">Le registre est vide. Aucune opération enregistrée.</td></tr>
+                          )}
+                       </tbody>
+                    </table>
+                 </div>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'audit' && (
+           <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-2"><Activity className="text-[#2EC4B6]"/> Journal d'Audit (Exécutions Système)</h2>
+              <p className="text-gray-600 text-sm">Ce registre trace toutes les actions effectuées dans le système, au-delà des simples opérations financières, pour garantir une sécurité et une traçabilité totales.</p>
+              
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                 <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-800 text-white">
+                       <tr>
+                          <th className="p-4 font-bold">Date & Heure</th>
+                          <th className="p-4 font-bold">Utilisateur / Profil</th>
+                          <th className="p-4 font-bold">Action effectuée (Description)</th>
+                       </tr>
+                    </thead>
+                    <tbody>
+                       {(erpData.systemLogs || []).map(log => (
+                          <tr key={log.id} className="border-b hover:bg-slate-50 transition-colors">
+                             <td className="p-4 font-mono text-xs text-gray-500">{new Date(log.date).toLocaleString('fr-FR')}</td>
+                             <td className="p-4 font-bold text-[#0D3B48] flex items-center gap-2"><User size={14} className="text-gray-400"/> {log.user}</td>
+                             <td className="p-4 text-gray-700 font-medium">{log.action}</td>
+                          </tr>
+                       ))}
+                       {(!erpData.systemLogs || erpData.systemLogs.length === 0) && (
+                          <tr><td colSpan="3" className="p-8 text-center text-gray-400">Aucune activité enregistrée pour le moment.</td></tr>
+                       )}
+                    </tbody>
+                 </table>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'legal' && (
+           <div className="space-y-6">
+              <div className="bg-gradient-to-r from-red-800 to-rose-700 rounded-xl p-6 shadow-md text-white flex justify-between items-center">
+                 <div><h2 className="text-2xl font-bold mb-1 flex items-center gap-2"><ShieldCheck/> Conformité & Documents Légaux</h2><p className="text-red-100 text-sm">Surveillez l'expiration de vos autorisations FRA, assurances et RCCM.</p></div>
+                 <button onClick={()=>setActionModal({ type: 'edit_doc', obj: { nom: '', ref: '', dateExpiration: new Date().toISOString() } })} className="bg-white text-red-800 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-red-50"><PlusCircle size={16}/> Ajouter Doc</button>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                 <table className="w-full text-left text-sm">
+                    <thead><tr className="bg-gray-50"><th className="p-4">Document Officiel</th><th className="p-4">Référence</th><th className="p-4">Date d'Expiration</th><th className="p-4">Statut</th><th className="p-4 text-right">Actions</th></tr></thead>
+                    <tbody>
+                       {(erpData.documentsLegaux || []).map(doc => {
+                          const isCritique = new Date(doc.dateExpiration).getTime() < Date.now() + (86400000 * 30);
+                          const isExpire = new Date(doc.dateExpiration).getTime() < Date.now();
+                          return (
+                             <tr key={doc.id} className="border-b">
+                                <td className="p-4 font-bold text-[#0D3B48]">{doc.nom}</td><td className="p-4 font-mono text-gray-500">{doc.ref}</td>
+                                <td className={`p-4 font-bold ${isExpire ? 'text-red-600' : (isCritique ? 'text-orange-500' : 'text-green-600')}`}>{new Date(doc.dateExpiration).toLocaleDateString()}</td>
+                                <td className="p-4"><span className={`px-2 py-1 rounded text-xs font-bold ${isExpire ? 'bg-red-100 text-red-700' : (isCritique ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700')}`}>{isExpire ? 'EXPIRÉ' : (isCritique ? 'CRITIQUE (<30j)' : 'Actif')}</span></td>
+                                <td className="p-4 text-right">
+                                   <button onClick={() => setActionModal({ type: 'edit_doc', obj: doc })} className="bg-gray-100 text-gray-600 px-3 py-1 rounded text-xs font-bold hover:bg-gray-200 flex items-center gap-1 inline-flex"><Edit size={12}/> Éditer</button>
+                                </td>
+                             </tr>
+                          )
+                       })}
+                    </tbody>
+                 </table>
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'maintenance' && (
+          <div className="space-y-6">
+             <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-2"><Wrench className="text-[#2EC4B6]"/> Maintenance (GMAO Prédictive 4.0)</h2>
+                <button onClick={()=>setActionModal({ type: 'edit_machine', obj: { machine: '', status: 'Opérationnel', lastMaintenance: new Date().toISOString(), tonnageProcess: 0 } })} className="bg-[#2EC4B6] text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-[#0D3B48]"><PlusCircle size={16}/> Nouvel Équipement</button>
+             </div>
+             
+             <div className="bg-blue-50 text-blue-800 p-4 rounded-xl border border-blue-200 shadow-sm flex items-center gap-3">
+                <Zap className="text-blue-500"/><p className="text-sm font-semibold">L'algorithme analyse l'usure en fonction du <strong>Tonnage réel traité</strong> et non plus de dates fixes. Seuil d'alerte configuré à 30 tonnes.</p>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {(erpData.maintenance || []).map(m => {
+                   const isAlert = m.alert;
+                   const pctUsure = Math.min(100, ((m.tonnageProcess || 0) / 30000) * 100);
+                   return (
+                      <div key={m.id} className={`p-6 rounded-xl shadow-sm border-t-4 relative ${isAlert ? 'bg-red-50 border-red-500' : 'bg-white border-[#2EC4B6]'}`}>
+                         <div className="flex justify-between items-start mb-4"><h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">{m.machine} <button onClick={()=>setActionModal({ type: 'edit_machine', obj: m })} className="text-gray-400 hover:text-[#2EC4B6]"><Edit size={14}/></button></h3>{isAlert ? <AlertTriangle className="text-red-500 animate-pulse"/> : <CheckCircle className="text-[#2EC4B6]"/>}</div>
+                         
+                         <div className="text-sm text-gray-600 mb-4 space-y-2">
+                            <p>Statut : <strong className={isAlert ? 'text-red-600' : 'text-green-600'}>{m.status}</strong></p>
+                            <div>
+                               <div className="flex justify-between text-xs mb-1 font-bold"><span>Usure (Tonnage)</span><span>{(m.tonnageProcess||0).toLocaleString()} kg / 30t</span></div>
+                               <div className="w-full h-2 bg-gray-200 rounded-full"><div className={`h-2 rounded-full ${isAlert ? 'bg-red-500' : (pctUsure > 80 ? 'bg-orange-500' : 'bg-green-500')}`} style={{width: `${pctUsure}%`}}></div></div>
+                            </div>
+                         </div>
+                         <div className="flex gap-2">
+                            {isAlert ? (<button onClick={() => { updateErpState(d => { const mx = d.maintenance.find(x=>x.id===m.id); if(mx) { mx.status = 'Opérationnel'; mx.alert = false; mx.tonnageProcess = 0; mx.lastMaintenance = new Date().toISOString(); } }, `Maintenance validée sur équipement: ${m.machine}`).then(s=>s&&showToast("Entretien validé, compteur réinitialisé.")); }} className="w-full py-2 bg-red-600 text-white rounded font-bold text-sm hover:bg-red-700">Valider Révision (Reset 0)</button>) : (<button onClick={() => { updateErpState(d => { const mx = d.maintenance.find(x=>x.id===m.id); if(mx) { mx.alert = true; mx.status = "Panne Signalée"; } }, `Déclaration de panne sur: ${m.machine}`).then(s=>s&&showToast("Alerte de panne déclenchée.")); }} className="w-full py-2 bg-gray-200 text-gray-700 rounded font-bold text-sm hover:bg-gray-300">Forcer Panne</button>)}
+                         </div>
+                      </div>
+                   )
+                })}
+             </div>
+          </div>
+        )}
+
+        {activeTab === 'rh' && (
+          <div className="space-y-6 relative">
+            <div className="flex justify-between items-center">
+               <h2 className="text-2xl font-bold text-[#0D3B48] flex items-center gap-2"><Users className="text-[#2EC4B6]"/> Gestion du Personnel & Pointage</h2>
+               <div className="flex gap-2">
+                  <button onClick={() => {
+                     const randomJour = erpData.personnel.find(p => p.modeRemuneration === 'jour');
+                     if(randomJour) {
+                        updateErpState(d => { const p = d.personnel.find(x=>x.id===randomJour.id); if(p) p.joursTravailles = (p.joursTravailles || 0) + 1; }, `Pointage journalier de: ${randomJour.nom}`);
+                        showToast(`Pointage RFID réussi pour ${randomJour.nom} (+1 jour)`);
+                     } else showToast("Aucun manœuvre journalier trouvé.", "error");
+                  }} className="bg-slate-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-slate-800"><Fingerprint size={16}/> Simuler Badgeuse Usine</button>
+                  <button onClick={() => setActionModal({ type: 'edit_rh', emp: { nom: '', role: '', pin: '', type: 'interne', modeRemuneration: 'mois', salaire: 0, primes: 0, avances: 0 } })} className="bg-[#2EC4B6] text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-[#0D3B48]"><PlusCircle size={16}/> Nouveau Contrat</button>
+               </div>
+            </div>
+            
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead><tr className="bg-gray-100"><th className="p-4">Employé</th><th className="p-4">Statut Pointage</th><th className="p-4">Finances (Primes/Avances)</th><th className="p-4 text-right">Actions</th></tr></thead>
+                <tbody>
+                  {(erpData.personnel || []).map(emp => {
+                     return (
+                    <tr key={emp.id} className="border-b hover:bg-slate-50">
+                      <td className="p-4"><div className="font-bold flex items-center gap-2 text-gray-800">{emp.nom} <button onClick={()=>setActionModal({type:'edit_rh', emp})} className="text-gray-400 hover:text-[#2EC4B6] bg-gray-50 p-1 rounded"><Edit size={14}/></button></div><div className="text-xs text-gray-500 mt-1">{emp.role} (Code: {emp.pin}) • <span className="text-[#C29B38] font-bold inline-flex items-center gap-1"><Award size={12}/> {emp.reussites || 0} réussites</span></div></td>
+                      <td className="p-4 text-sm font-bold">
+                         {emp.modeRemuneration === 'jour' ? <span className="text-[#2EC4B6]">{emp.joursTravailles || 0} jours pointés</span> : (emp.modeRemuneration === 'voyage' ? <span className="text-blue-500">{emp.voyagesCumules || 0} voyages</span> : <span className="text-gray-400">Mensuel (Fixe)</span>)}
+                      </td>
+                      <td className="p-4 text-xs font-semibold">
+                         {emp.modeRemuneration === 'voyage' ? 
+                           <div className="bg-blue-50 text-blue-700 px-2 py-1 rounded inline-block border border-blue-100">Voyages: {emp.voyagesCumules||0}</div> : 
+                           <div className="flex gap-2"><span className="bg-green-50 text-green-700 px-2 py-1 rounded border border-green-100">P: +{(emp.primes||0).toLocaleString()} F</span><span className="bg-red-50 text-red-700 px-2 py-1 rounded border border-red-100">A: -{(emp.avances||0).toLocaleString()} F</span></div>}
+                      </td>
+                      <td className="p-4 text-right flex justify-end gap-2">
+                         {emp.modeRemuneration === 'voyage' && (<button onClick={()=>updateErpState(d=>{ const p = d.personnel.find(x=>x.id===emp.id); if(p) p.voyagesCumules=(p.voyagesCumules||0)+1; })} className="px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-bold transition-colors">+1 Voyage</button>)}
+                         {emp.modeRemuneration === 'jour' && (
+                             <div className="flex items-center bg-purple-50 border border-purple-200 rounded overflow-hidden shadow-sm">
+                                <button onClick={()=>updateErpState(d=>{ const p = d.personnel.find(x=>x.id===emp.id); if(p) p.joursTravailles=Math.max(0, (p.joursTravailles||0)-1); })} className="px-3 py-1.5 text-purple-700 hover:bg-purple-200 font-black transition-colors">-</button>
+                                <span className="px-3 text-xs font-bold text-purple-900 border-x border-purple-200 bg-purple-100 py-1.5">{emp.joursTravailles||0} J</span>
+                                <button onClick={()=>updateErpState(d=>{ const p = d.personnel.find(x=>x.id===emp.id); if(p) p.joursTravailles=(p.joursTravailles||0)+1; })} className="px-3 py-1.5 text-purple-700 hover:bg-purple-200 font-black transition-colors">+</button>
+                             </div>
+                         )}
+                         {(emp.modeRemuneration !== 'voyage') && (<><button onClick={()=>setActionModal({type:'prime', emp})} className="px-3 py-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-bold transition-colors">+ Prime</button><button onClick={()=>setActionModal({type:'avance', emp})} className="px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-bold transition-colors">- Avance</button></>)}
+                         <button onClick={()=>{ const base = emp.modeRemuneration === 'voyage' ? ((emp.voyagesCumules||0)*emp.prixVoyage) : (emp.modeRemuneration === 'jour' ? ((emp.joursTravailles||0)*(emp.tauxJournalier||0)) : emp.salaire); imprimerDocument('paie', { nom: emp.nom, role: emp.role, base, primes: emp.primes||0, avances: emp.avances||0, net: base+(emp.primes||0)-(emp.avances||0) }); }} className="px-4 py-1.5 bg-[#0D3B48] text-white hover:bg-gray-800 rounded text-xs font-bold flex items-center gap-1 shadow-sm transition-colors"><FileText size={14}/> Fiche</button>
+                      </td>
+                    </tr>
+                  )})}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {actionModal && (
+         <div className="fixed inset-0 bg-black/70 z-[100] flex justify-center items-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+               <div className="flex justify-between items-center mb-6 border-b pb-2">
+                 <h3 className="font-bold text-lg text-[#0D3B48] capitalize flex items-center gap-2">
+                   <Edit size={18}/> 
+                   {actionModal.type === 'edit_rh' ? 'Éditer Employé' : actionModal.type === 'edit_client' ? 'Éditer Client' : actionModal.type === 'edit_saunier' ? 'Éditer Fournisseur' : actionModal.type === 'edit_doc' ? 'Éditer Document' : actionModal.type === 'edit_machine' ? 'Éditer Machine' : 'Opération Financière'}
+                 </h3>
+                 <button onClick={()=>setActionModal(null)} className="text-gray-400 hover:text-red-500 bg-gray-100 rounded-full p-1"><X size={20}/></button>
+               </div>
+               
+               <form onSubmit={submitEntityEditModal} className="space-y-4">
+                  {actionModal.type === 'edit_rh' && (
+                     <>
+                        <div><label className="block text-xs font-bold mb-1">Nom Complet</label><input type="text" name="nom" defaultValue={actionModal.emp?.nom} className="w-full p-3 border rounded bg-slate-50" required/></div>
+                        <div className="grid grid-cols-2 gap-2"><div><label className="block text-xs font-bold mb-1">Rôle</label><input type="text" name="role" defaultValue={actionModal.emp?.role} className="w-full p-3 border rounded bg-slate-50" required/></div><div><label className="block text-xs font-bold mb-1">Code PIN</label><input type="text" name="pin" defaultValue={actionModal.emp?.pin} maxLength="4" className="w-full p-3 border rounded text-center tracking-widest font-mono bg-slate-50" required/></div></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><label className="block text-xs font-bold mb-1">Type Contrat</label><select name="type" defaultValue={actionModal.emp?.type || 'interne'} className="w-full p-3 border rounded bg-white"><option value="interne">Interne</option><option value="externe">Externe</option></select></div>
+                          <div><label className="block text-xs font-bold mb-1">Rémunération</label><select name="modeRemuneration" defaultValue={actionModal.emp?.modeRemuneration || 'mois'} className="w-full p-3 border rounded bg-white"><option value="mois">Mensuel (Fixe)</option><option value="jour">À la Journée</option><option value="voyage">Au Voyage</option><option value="pourcentage">Pourcentage Bénéfs</option></select></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2"><div><label className="block text-xs font-bold mb-1">Salaire Mois (F)</label><input type="number" name="salaire" defaultValue={actionModal.emp?.salaire} className="w-full p-3 border rounded"/></div><div><label className="block text-xs font-bold mb-1">Taux Jour (F)</label><input type="number" name="tauxJournalier" defaultValue={actionModal.emp?.tauxJournalier} className="w-full p-3 border rounded"/></div></div>
+                        <div className="grid grid-cols-2 gap-2"><div><label className="block text-xs font-bold mb-1">Prix Voyage (F)</label><input type="number" name="prixVoyage" defaultValue={actionModal.emp?.prixVoyage} className="w-full p-3 border rounded"/></div><div><label className="block text-xs font-bold mb-1">Part Bénéfs (%)</label><input type="number" step="any" name="pourcentageBenefice" defaultValue={actionModal.emp?.pourcentageBenefice} className="w-full p-3 border rounded"/></div></div>
+                     </>
+                  )}
+                  {actionModal.type === 'edit_client' && (
+                     <>
+                        <div><label className="block text-xs font-bold mb-1">Nom du Client / Entreprise</label><input type="text" name="nom" defaultValue={actionModal.obj?.nom} className="w-full p-3 border rounded" required/></div>
+                        <div className="grid grid-cols-2 gap-2"><div><label className="block text-xs font-bold mb-1">Type (B2B/B2C)</label><input type="text" name="type" defaultValue={actionModal.obj?.type || 'Grossiste'} className="w-full p-3 border rounded" required/></div><div><label className="block text-xs font-bold mb-1">Code PIN (E-Portail)</label><input type="text" name="pin" defaultValue={actionModal.obj?.pin} maxLength="4" className="w-full p-3 border rounded text-center tracking-widest font-mono" required/></div></div>
+                        <div className="grid grid-cols-2 gap-2"><div><label className="block text-xs font-bold mb-1 text-green-600">Plafond Crédit Autorisé</label><input type="number" name="plafond" defaultValue={actionModal.obj?.plafond} className="w-full p-3 border rounded"/></div><div><label className="block text-xs font-bold mb-1 text-red-600">Dette Actuelle</label><input type="number" name="dette" defaultValue={actionModal.obj?.dette} className="w-full p-3 border rounded"/></div></div>
+                     </>
+                  )}
+                  {actionModal.type === 'edit_saunier' && (
+                     <>
+                        <div><label className="block text-xs font-bold mb-1">Nom du Saunier / GIE</label><input type="text" name="nom" defaultValue={actionModal.obj?.nom} className="w-full p-3 border rounded" required/></div>
+                        <div><label className="block text-xs font-bold mb-1">Téléphone (Pour Alertes SMS)</label><input type="text" name="telephone" defaultValue={actionModal.obj?.telephone} className="w-full p-3 border rounded" placeholder="+221..."/></div>
+                        <div className="grid grid-cols-2 gap-2"><div><label className="block text-xs font-bold mb-1">Score Qualité (0-100)</label><input type="number" name="score" defaultValue={actionModal.obj?.score} max="100" className="w-full p-3 border rounded" required/></div><div><label className="block text-xs font-bold mb-1 text-red-600">Avance en cours (F)</label><input type="number" name="avance" defaultValue={actionModal.obj?.avance} className="w-full p-3 border rounded"/></div></div>
+                     </>
+                  )}
+                  {actionModal.type === 'edit_doc' && (
+                     <>
+                        <div><label className="block text-xs font-bold mb-1">Nom du Document</label><input type="text" name="nom" defaultValue={actionModal.obj?.nom} className="w-full p-3 border rounded" required/></div>
+                        <div><label className="block text-xs font-bold mb-1">Référence Légale</label><input type="text" name="ref" defaultValue={actionModal.obj?.ref} className="w-full p-3 border rounded" required/></div>
+                        <div><label className="block text-xs font-bold mb-1">Date d'Expiration</label><input type="date" name="dateExpiration" defaultValue={actionModal.obj?.dateExpiration?.split('T')[0]} className="w-full p-3 border rounded" required/></div>
+                     </>
+                  )}
+                  {actionModal.type === 'edit_machine' && (
+                     <>
+                        <div><label className="block text-xs font-bold mb-1">Nom de l'Équipement</label><input type="text" name="machine" defaultValue={actionModal.obj?.machine} className="w-full p-3 border rounded" required/></div>
+                        <div><label className="block text-xs font-bold mb-1">Statut Actuel</label><select name="status" defaultValue={actionModal.obj?.status} className="w-full p-3 border rounded"><option value="Opérationnel">Opérationnel (Vert)</option><option value="Alerte">Panne / Alerte (Rouge)</option></select></div>
+                        <div className="grid grid-cols-2 gap-2"><div><label className="block text-xs font-bold mb-1">Dernière Maint.</label><input type="date" name="lastMaintenance" defaultValue={actionModal.obj?.lastMaintenance?.split('T')[0]} className="w-full p-3 border rounded" required/></div><div><label className="block text-xs font-bold mb-1">Tonnage usure (kg)</label><input type="number" name="tonnageProcess" defaultValue={actionModal.obj?.tonnageProcess||0} className="w-full p-3 border rounded" required/></div></div>
+                     </>
+                  )}
+                  {actionModal.type === 'avance_saunier' && (
+                     <div className="bg-slate-50 p-4 rounded-xl space-y-4">
+                       <p className="text-sm font-bold text-gray-700">Fournisseur : <span className="text-[#2EC4B6]">{actionModal.obj?.nom}</span></p>
+                       <div>
+                          <label className="block text-xs font-bold mb-1 text-gray-700">Montant de l'avance en FCFA</label>
+                          <input type="number" required min="1" step="any" name="amount" className="w-full p-4 border rounded-xl text-xl font-black text-center text-[#0D3B48] bg-white" autoFocus placeholder="0"/>
+                       </div>
+                       <div>
+                          <label className="block text-xs font-bold mb-1 text-gray-700">Moyen de paiement</label>
+                          <select name="method" className="w-full p-3 border rounded-xl font-bold bg-white"><option value="Espèces">Espèces Caisse</option><option value="Wave">Wave</option><option value="Orange Money">Orange Money</option></select>
+                       </div>
+                       <p className="text-xs text-center text-gray-500 mt-2">Sera déduit de la trésorerie globale.</p>
+                     </div>
+                  )}
+                  {actionModal.type === 'payer_dette' && (
+                     <div className="bg-slate-50 p-4 rounded-xl space-y-4">
+                       <p className="text-sm font-bold text-gray-700">Fournisseur : <span className="text-[#2EC4B6]">{actionModal.obj?.nom}</span></p>
+                       <p className="text-xs font-bold text-red-600">Dette actuelle : {(actionModal.obj?.dette || 0).toLocaleString()} F</p>
+                       <div>
+                          <label className="block text-xs font-bold mb-1 text-gray-700">Montant à rembourser (FCFA)</label>
+                          <input type="number" required min="1" max={actionModal.obj?.dette} step="any" name="amount" className="w-full p-4 border rounded-xl text-xl font-black text-center text-[#0D3B48] bg-white" autoFocus placeholder="0"/>
+                       </div>
+                     </div>
+                  )}
+                  {actionModal.type === 'remboursement' && (
+                     <div className="bg-slate-50 p-4 rounded-xl space-y-4">
+                       <p className="text-sm font-bold text-gray-700">Client : <span className="text-[#2EC4B6]">{actionModal.obj?.nom}</span></p>
+                       <p className="text-xs font-bold text-orange-600">Dette actuelle : {(actionModal.obj?.dette || 0).toLocaleString()} F</p>
+                       <div>
+                          <label className="block text-xs font-bold mb-1 text-gray-700">Montant encaissé (FCFA)</label>
+                          <input type="number" required min="1" max={actionModal.obj?.dette} step="any" name="amount" className="w-full p-4 border rounded-xl text-xl font-black text-center text-green-600 bg-white" autoFocus placeholder="0"/>
+                       </div>
+                     </div>
+                  )}
+                  {(actionModal.type === 'prime' || actionModal.type === 'avance') && (
+                     <div className="bg-slate-50 p-4 rounded-xl">
+                       <p className="text-sm font-bold text-gray-700 mb-2">Employé ciblé : <span className="text-[#2EC4B6]">{actionModal.emp?.nom}</span></p>
+                       <label className="block text-xs font-bold mb-2 text-gray-700">Montant en FCFA</label>
+                       <input type="number" required min="1" step="any" name="amount" className="w-full p-4 border rounded-xl text-xl font-black text-center text-[#0D3B48] bg-white" autoFocus placeholder="0"/>
+                       <p className="text-xs text-center text-gray-500 mt-2">{actionModal.type === 'avance' ? "Sera déduit de la trésorerie globale." : "Sera ajouté à la paie de l'employé."}</p>
+                     </div>
+                  )}
+                  {actionModal.type === 'edit_nc' && (() => {
+                     const linkedLot = actionModal.obj?.lotId ? erpData.lots?.find(l => l.id === actionModal.obj.lotId) : null;
+                     let calc = null;
+                     if (linkedLot && linkedLot.labo?.iode && linkedLot.status === 'Quarantaine') {
+                         const iode = linkedLot.labo.iode;
+                         const qty = linkedLot.qty;
+                         if (iode < 30) {
+                             const deficit = 40 - iode;
+                             const kio3 = (qty * (deficit / 40) * 0.0678) / 1000;
+                             calc = { type: 'kio3', val: kio3, text: `Ajouter ${kio3.toFixed(4)} kg de KIO3`, title: 'Sous-dosage détecté' };
+                         } else if (iode > 50) {
+                             const sel = (qty * (iode - 40)) / 40;
+                             calc = { type: 'sel', val: sel, text: `Diluer avec ${sel.toFixed(0)} kg de Sel Lavé (Non iodé)`, title: 'Sur-dosage détecté' };
+                         }
+                     }
+                     return (
+                         <div className="space-y-4">
+                            <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mb-2">
+                               <p className="text-sm font-bold text-orange-800 flex items-center gap-2"><FileWarning size={16}/> Rapport de Non-Conformité (NC)</p>
+                            </div>
+                            
+                            {calc && (
+                               <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded-xl shadow-inner">
+                                   <h4 className="font-bold text-blue-900 flex items-center gap-2"><Beaker size={18}/> Plan de Correction Automatisé</h4>
+                                   <div className="text-sm text-blue-800 mt-2 space-y-1">
+                                      <p><strong>Problème :</strong> {calc.title} (Actuel: {linkedLot.labo.iode} ppm)</p>
+                                      <p><strong>Action requise :</strong> {calc.text}</p>
+                                      <p><strong>Cible finale :</strong> Le lot #{linkedLot.id} sera réévalué à <strong>40 ppm</strong> (Idéal).</p>
+                                   </div>
+                                   <label className="flex items-center gap-2 mt-4 text-sm font-bold text-blue-800 bg-white p-3 rounded-lg border border-blue-300 cursor-pointer shadow-sm hover:bg-blue-50 transition-colors">
+                                      <input type="checkbox" name="applyCorrection" value={JSON.stringify(calc)} className="accent-blue-600 w-5 h-5 flex-shrink-0" />
+                                      Exécuter cette correction (Stocks) & Valider le lot
+                                   </label>
+                               </div>
+                            )}
+
+                            <div><label className="block text-xs font-bold mb-1">Description du Problème</label><textarea name="desc" defaultValue={actionModal.obj?.desc} readOnly={!!actionModal.obj?.lotId} className={`w-full p-3 border rounded-xl font-medium focus:border-orange-500 outline-none ${actionModal.obj?.lotId ? 'bg-gray-100 text-gray-600' : 'bg-slate-50'}`} rows="3" required placeholder="Décrivez le défaut, l'incident ou l'anomalie..."></textarea></div>
+                            <div><label className="block text-xs font-bold mb-1">Action Corrective Manuelle</label><textarea name="actionCorrective" defaultValue={actionModal.obj?.actionCorrective} className="w-full p-3 border rounded-xl bg-slate-50 font-medium focus:border-green-500 outline-none" rows="2" placeholder={calc ? "Laissez vide si vous cochez la case de correction automatisée au-dessus..." : "Ex: Recalibrer la machine..."}></textarea></div>
+                            <div>
+                               <label className="block text-xs font-bold mb-1">Statut de la NC</label>
+                               <select name="status" defaultValue={actionModal.obj?.status || 'Ouvert'} className="w-full p-3 border rounded-xl font-bold bg-white outline-none focus:border-[#2EC4B6]">
+                                  <option value="Ouvert">🔴 Ouvert (Critique)</option>
+                                  <option value="En cours">🟠 En cours de traitement</option>
+                                  <option value="Résolu">🟢 Résolu (Lot sauvé ou Problème réglé)</option>
+                                  <option value="Rejeté">⚫ Rejeté / Détruit (Perte sèche)</option>
+                               </select>
+                            </div>
+                            <p className="text-[10px] text-gray-500 italic mt-2">* Astuce : Si une NC liée à un lot en Quarantaine est marquée comme "Résolu", le lot sera automatiquement reclassé en "Conforme" dans les stocks.</p>
+                         </div>
+                     );
+                  })()}
+                  <button type="submit" className="w-full bg-[#0D3B48] text-white font-bold py-4 rounded-xl mt-4 shadow-md hover:bg-[#2EC4B6] transition-colors">Enregistrer</button>
+               </form>
+            </div>
+         </div>
+      )}
+    </div>
+  );
+}
